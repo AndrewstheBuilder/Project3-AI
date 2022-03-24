@@ -2,10 +2,12 @@ from tkinter import *
 from tkinter import ttk
 from tkinter import filedialog
 
+
 def selectFile():
     '''
     '''
     file = filedialog.askopenfilename(initialdir = "/", title=("Select a file"), filetypes=(("Text file", "*.txt*"),("Any File", "*.*")))
+
 
 def createGui():
     '''
@@ -22,9 +24,10 @@ def createGui():
     ttk.Button(frm, text="Browse", command=selectFile).grid(column=1, row=0)
     gui.mainloop()
 
+
 def main():
     createGui()
-    #Aman was here test
+    # Aman was here test
 
 
 if __name__ == '__main__':

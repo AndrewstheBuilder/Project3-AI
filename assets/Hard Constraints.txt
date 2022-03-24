@@ -1,0 +1,3 @@
+NOT soup OR NOT ice-cream
+NOT beef OR salad
+...
