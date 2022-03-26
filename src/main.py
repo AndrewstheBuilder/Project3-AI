@@ -53,7 +53,7 @@ class PreferencesObject(DataObject):
 
 class UI:
     '''
-    Creates a Canvas
+    Creates a Canvas and everything that goes with it
     '''
 
     #static class variable
