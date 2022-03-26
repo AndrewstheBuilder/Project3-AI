@@ -12,12 +12,19 @@ class DataObject:
     '''
     def __init__(self):
         self.fileData = None
+        self.fileName = None
 
     def setFileData(self, data):
         self.fileData = data
 
     def getFileData(self):
         return self.fileData
+
+    def setFileName(self,name):
+        self.fileName = name
+
+    def getFileName(self):
+        return self.fileName
 
 #Below three classes inherit from DataObject class
 class AttributeObject(DataObject):
@@ -47,8 +54,6 @@ class UI:
         self.frame = frame
         self.canvas = None
         self.uniqueTag = self.dataObject.type
-        self.fileName = None
-
         self.createCanvas()
 
     def setFileData(self, fileData):
@@ -58,10 +63,10 @@ class UI:
         return self.dataObject.getFileData()
 
     def setFileName(self, fileName):
-        self.fileName = fileName
+        self.dataObject.setFileName(fileName)
 
     def getFileName(self):
-        return self.fileName
+        return self.dataObject.getFileName()
 
     def createCanvas(self):
         global columnNum, buttonText
@@ -84,21 +89,27 @@ class UI:
         ttk.Button(self.frame, text="Insert a file", command=self.selectFile).grid(column=columnNum, row=3)
         columnNum +=2 #for tab1 placement
 
+    def printFileData(self):
+        print("File data:\n",self.getFileData())
+
     def selectFile(self):
         '''
         '''
-        #global file, maxValue
         file = filedialog.askopenfilename(initialdir = "../assets", title=("Select a file"), filetypes=(("Text file", "*.txt*"),("Any File", "*.*")))
         self.setFileName(file)
 
         #reset canvas before inserting text
         self.canvas.delete(self.uniqueTag)
 
+        #read from file and set file data
         if(file):
             fileObj = open(file)
-            self.canvas.create_text(10, 10, text=fileObj.read(), anchor='nw', tag=self.uniqueTag)
-            self.dataObject.setFileData(fileObj.read())
+            fileData = fileObj.read()
+            self.canvas.create_text(10, 10, text=fileData, anchor='nw', tag=self.uniqueTag)
+            self.setFileData(fileData)
+            self.printFileData()
             fileObj.close()
+
 
 #Create a GUI
 root = Tk()
@@ -124,7 +135,6 @@ notebook.add(frame2, text="Output")
 #Create Attribute UI
 attrObj = AttributeObject()
 attrUI = UI(attrObj,frame1)
-print('UI filename', attrUI.getFileData())
 
 #Create Hard Constraints UI
 hardCObj = HardConstraintObject()
