@@ -28,21 +28,33 @@ class DataObject:
 
 #Below three classes inherit from DataObject class
 class AttributeObject(DataObject):
+    '''
+    Object to represent Attributes
+    '''
     def __init__(self, attrFileData=None):
         self.setFileData(attrFileData)
         self.type = 'attr'
 
 class HardConstraintObject(DataObject):
+    '''
+    Object to represent Hard Constraints
+    '''
     def __init__(self, hardCFileData=None):
         self.setFileData(hardCFileData)
         self.type = 'hardc'
 
 class PreferencesObject(DataObject):
+    '''
+    Object to represent Preferences
+    '''
     def __init__(self, prefFileData=None):
         self.setFileData(prefFileData)
         self.type = 'pref'
 
 class UI:
+    '''
+    Creates a Canvas
+    '''
 
     #static class variable
     global columnNum, buttonText
@@ -50,6 +62,9 @@ class UI:
     buttonText = {'attr':"Attributes", 'hardc':"Hard Constraints", 'pref':"Preferences"}
 
     def __init__(self,dataObject,frame):
+        '''
+        Initialize UI object. Window has already been initialized. Canvas becomes a instance of every UI object
+        '''
         self.dataObject = dataObject
         self.frame = frame
         self.canvas = None
@@ -57,18 +72,33 @@ class UI:
         self.createCanvas()
 
     def setFileData(self, fileData):
+        '''
+        Set file data to dataObject assigned to UI Object
+        '''
         self.dataObject.setFileData(fileData)
 
     def getFileData(self):
+        '''
+        Get file data from dataObject assigned to UI Object
+        '''
         return self.dataObject.getFileData()
 
     def setFileName(self, fileName):
+        '''
+        Set file name to dataObject assigned to UI Object
+        '''
         self.dataObject.setFileName(fileName)
 
     def getFileName(self):
+        '''
+        Get file name from dataObject assigned to UI object
+        '''
         return self.dataObject.getFileName()
 
     def createCanvas(self):
+        '''
+        Create Canvas to insert text
+        '''
         global columnNum, buttonText
 
         #scrollbar
@@ -90,11 +120,15 @@ class UI:
         columnNum +=2 #for tab1 placement
 
     def printFileData(self):
+        '''
+        Test to see if file data got saved
+        '''
         print("File name:",self.getFileName())
         print("File data:\n",self.getFileData())
 
     def selectFile(self):
         '''
+        Open a file and read data from it
         '''
         file = filedialog.askopenfilename(initialdir = "../assets", title=("Select a file"), filetypes=(("Text file", "*.txt*"),("Any File", "*.*")))
         self.setFileName(file)
