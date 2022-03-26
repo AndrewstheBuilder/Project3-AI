@@ -90,6 +90,7 @@ class UI:
         columnNum +=2 #for tab1 placement
 
     def printFileData(self):
+        print("File name:",self.getFileName())
         print("File data:\n",self.getFileData())
 
     def selectFile(self):
