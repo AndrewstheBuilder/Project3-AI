@@ -2,3 +2,7 @@ appetizer: soup, salad
 entree: beef, fish
 drink: beer, wine
 dessert: cake, ice-cream
+utensils: fork, spoon
+outfits: shirt, shoes
+weapons: knife, gun
+vehicles: car, van
