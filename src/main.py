@@ -3,9 +3,8 @@ from tkinter import ttk
 from tkinter import filedialog
 from tkinter import Canvas
 from tkinter import Scrollbar
-from turtle import bgcolor
 from sympy import to_cnf,symbols
-import re
+from subprocess import Popen,PIPE
 
 
 class DataObject:
@@ -15,6 +14,7 @@ class DataObject:
     parsedAttributes = dict() #dictionary of binary attributes(keys) and their integer representations(values)
     binaryOperators = dict({'NOT':'~','OR':'|','AND':'&'})
     hardConstraints = [] #list of constraints
+    hardConstraintsCNF = [] #list of constraints in CNF/digitized form
     preferences = dict() #dict of preferences[key is preference name(Qualitative logic,Penality,Possibilistic)]: value is array of strings for each preference
     symbolsList = [] #for input into sympy.symbols()
 
@@ -42,13 +42,40 @@ class DataObject:
         if(str(index) not in cls.symbolsList):
             cls.symbolsList.append(str(index))
         cls.parsedAttributes[attribute] = index
+        # print('@ add method',cls.parsedAttributes)
+
+    @classmethod
+    def clearAttributes(cls):
+        '''
+        clear everything that is used in reading in attributes file
+        '''
+        cls.symbolsList = []
+        cls.parsedAttributes = dict()
+        print("CLEARED ATTRIBUTES DATA")
+
+    @classmethod
+    def clearHardConstraints(cls):
+        '''
+        clear everything used in reading in hard constraints file
+        '''
+        cls.hardConstraints = []
+        cls.hardConstraintsCNF = []
+        print("CLEARED HARD CONSTRAINTS DATA")
+
+    @classmethod
+    def clearPreferences(cls):
+        '''
+        clear everything used in reading in Preferences file
+        '''
+        cls.preferences = dict()
+        print("CLEARED PREFERENCES DATA")
 
     @classmethod
     def printParsedAttributes(cls):
         '''
         Test to see if parsed attributes are there
         '''
-        print(cls.parsedAttributes)
+        print('ParsedAttributes dict',cls.parsedAttributes)
         print('symbols',cls.symbolsList)
 
     @classmethod
@@ -56,7 +83,8 @@ class DataObject:
         '''
         :returns parsedAttributes[key] -> int (value)
         '''
-        return cls.parsedAttributes[key]
+        # print('parsedAttributes from getAttribute()', cls.parsedAttributes)
+        return cls.parsedAttributes.get(key)
 
     @classmethod
     def addToHardConstraints(cls,term):
@@ -91,6 +119,43 @@ class DataObject:
                     evalStr += letter
             print('evalStr:\t',evalStr)
             print('to_cnf(evalStr):\t',to_cnf(eval(evalStr)))
+            cls.hardConstraintsCNF.append(str(to_cnf(eval(evalStr))))
+        #claspOutput = inputIntoClasp()
+        cls.checkSatisfy()
+
+    @classmethod
+    def checkSatisfy(cls):
+        '''
+        clasp format:
+        p cnf #of attributes #of clauses
+        ...hard constraints
+        ...preferences TODO
+        '''
+        clauses = []
+        for cnfConstraint in cls.hardConstraintsCNF:
+            clauses.extend(cnfConstraint.split('&')) #every & is a new line in clasp
+
+        # print('Inside input to clasp function',cls.hardConstraintsCNF)
+        claspInput = 'p cnf '+str(int(len(cls.symbolsList)/2)) + ' ' + str(len(clauses))
+        for c in clauses:
+            claspInput += '\n'
+            claspInput += ' '.join(c.split('|')) + ' 0' #split on ors and add spaces in between
+        # print('clasp input\n',claspName)
+        claspFile = './output.cnf'
+        with open(claspFile,'w') as o:
+            o.write(claspInput)
+        p = Popen(["clasp","./output.cnf"],stdout=PIPE,stderr=PIPE)
+        stdout,stderr = p.communicate()
+        # print('stdout\n',stdout)
+        print('UNSATISFIABLE:\t','UNSATISFIABLE' in str(stdout))
+        satisfy = not 'UNSATISFIABLE' in str(stdout)
+        top= Toplevel()
+        top.geometry("750x250")
+        top.title("Satisfiability Output")
+        Label(top, text=('FEASIBLE OBJECTS EXIST' if satisfy else 'FEASIBLE OBJECTS DO NOT EXIST'), font=('Ariel 18')).place(x=150,y=80)
+        # print('stderr\n',stderr)
+
+
 
 
 #
@@ -111,6 +176,7 @@ class AttributeObject(DataObject):
         '''
         Parse file data for Attribute File and save it to a data structure
         '''
+        #self.clearAttributes()
         #print('Inside attribute class\n',fileData)
         lines = fileData.split('\n')#get each line
         parsedAttributeIndex = 1 #will contribute to creating integer version of attributes
@@ -137,6 +203,7 @@ class HardConstraintObject(DataObject):
         '''
         Parse file data for Constraint file and save it to array of strings
         '''
+        #self.clearHardConstraints()
         lines = fileData.split('\n')#get each line
         for line in lines:
             terms = line.split(' ')
@@ -171,6 +238,7 @@ class PreferencesObject(DataObject):
         '''
         Parse Preferences file
         '''
+        self.preferences()
         lines = fileData.split('\n')
         #print(lines)
         for line in lines:
@@ -186,7 +254,7 @@ class UI:
     global columnNum, buttonText
     columnNum = 0
     buttonText = {'attr':"Attributes", 'hardc':"Hard Constraints", 'pref':"Preferences"}
-
+    buttonsToDisable = [] #list of buttons to disable and enable
     def __init__(self,dataObject,frame):
         '''
         Initialize UI object. Window has already been initialized. Canvas becomes a instance of every UI object
@@ -257,13 +325,44 @@ class UI:
 
         #button to insert
         ttk.Label(self.frame, text=buttonText[self.getType()],borderwidth=3, relief="raised").grid(column=columnNum, row=2)
-        ttk.Button(self.frame, text="Insert a file", command=self.selectFile).grid(column=columnNum, row=3)
-        if(self.getType() == 'attr'):
-            ttk.Button(self.frame, text="Generate Feasible Objects", command=self.generateFeasibleObjects).grid(column=8, row=1,pady=5)
-            ttk.Button(self.frame, text="Exemplification", command=self.generateFeasibleObjects).grid(column=8, row=2, pady=5)
-            ttk.Button(self.frame, text="Optimization", command=self.generateFeasibleObjects).grid(column=8, row=3, pady=5)
-            ttk.Button(self.frame, text="Omni-Optimization", command=self.generateFeasibleObjects).grid(column=8, row=4, pady=5)
+        b1 = ttk.Button(self.frame, text="Insert a file", command=self.selectFile)
+        b1.grid(column=columnNum, row=3)
+        if(self.getType() != 'attr'):
+            self.buttonsToDisable.append(b1)
+        if(self.getType() == 'pref'):
+            b2=ttk.Button(self.frame, text="Check if Feasible Objects", command=self.generateFeasibleObjects)
+            b2.grid(column=8, row=1,pady=5)
+            b3=ttk.Button(self.frame, text="Exemplification", command=self.generateFeasibleObjects)
+            b3.grid(column=8, row=2, pady=5)
+            b4=ttk.Button(self.frame, text="Optimization", command=self.generateFeasibleObjects)
+            b4.grid(column=8, row=3, pady=5)
+            b5=ttk.Button(self.frame, text="Omni-Optimization", command=self.generateFeasibleObjects)
+            b5.grid(column=8, row=4, pady=5)
+            self.buttonsToDisable.append(b2)
+            self.buttonsToDisable.append(b3)
+            self.buttonsToDisable.append(b4)
+            self.buttonsToDisable.append(b5)
         columnNum +=2 #for tab1 placement
+        self.disableButtons()
+
+    @classmethod
+    def disableButtons(cls):
+        '''
+        disables buttons in buttonsToDisable list
+        '''
+        for button in cls.buttonsToDisable:
+            # print(button)
+            button.state(['disabled'])
+
+    @classmethod
+    def enableButtons(cls):
+        '''
+        enables all buttons in buttonsToDisable list
+        '''
+        # print('its hitting',cls.buttonsToDisable)
+        for button in cls.buttonsToDisable:
+            # print(button)
+            button.state(['!disabled'])
 
     def printFileData(self):
         '''
@@ -284,6 +383,9 @@ class UI:
 
         #read from file and set file data
         if(file):
+            if(self.getType()=='attr'):
+                # print('it hits here')
+                self.enableButtons()
             fileObj = open(file)
             fileData = fileObj.read()
             self.canvas.create_text(10, 10, text=fileData, anchor='nw', tag=self.uniqueTag)
@@ -291,6 +393,10 @@ class UI:
             self.parseFileData(fileData)
             #self.printFileData()
             fileObj.close()
+        else:
+            #no file selected
+            if(self.getType() == 'attr'):
+                self.disableButtons()
 
 
 #Create a GUI
