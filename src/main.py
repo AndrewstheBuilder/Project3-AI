@@ -5,13 +5,15 @@ from tkinter import Canvas
 from tkinter import Scrollbar
 from sympy import to_cnf,symbols
 from subprocess import Popen,PIPE
+import re
 
 
 class DataObject:
     '''
     Object to represent attributes, hard constraints, and preferences at a high level
     '''
-    parsedAttributes = dict() #dictionary of binary attributes(keys) and their integer representations(values)
+    parsedAttributes = dict() #dictionary of keys(binary attributes) and their values(integer representations)
+    parsedAttributesReversed = dict() #same as above but keys(integer representations) and values(attributes)
     binaryOperators = dict({'NOT':'~','OR':'|','AND':'&'})
     hardConstraints = [] #list of constraints
     hardConstraintsCNF = [] #list of constraints in CNF/digitized form
@@ -32,7 +34,61 @@ class DataObject:
         self.fileName = name
 
     def getFileName(self):
+        '''
+        :returns name of filepath
+        '''
         return self.fileName
+    @classmethod
+    def exemplify(cls):
+        '''
+        Generate, if possible, two random feasible objects, and show the
+        preference between the two (strict preference or equivalence) w.r.t T
+        '''
+        objectsList = []
+        objectsList = cls.getNObjectsFromClasp(2)
+        print('@ exemplify() objectsList',objectsList)
+
+    @classmethod
+    def extractObjectsFromClaspOutput(cls,output):
+        '''
+        Find objects from clasp output
+        :returns list of objects
+        '''
+        print('Clasp output',output)
+        # print('Clasp output type',type(output))
+        # print('Satisfiable models\n',re.findall(r'-?[0-9] -?[0-9] -?[0-9] -?[0-9] -?[0-9] -?[0-9] -?[0-9] -?[0-9] 0',output))
+        regexToExtractObjects = r'-?[0-9] '*(int(len(cls.symbolsList)/2)) + r'0'
+        # print(regexToExtractObjects)
+        return re.findall(regexToExtractObjects,output)
+
+    @classmethod
+    def getNObjectsFromClasp(cls,n):
+        '''
+        :n - number of objects needed from clasp, n should be 0 to get all objects
+        :returns objectsList - n objects in digitized form
+        '''
+        objectsList = []
+        if(cls.checkSatisfy() == True):
+            clauses = []
+            for cnfConstraint in cls.hardConstraintsCNF:
+                clauses.extend(cnfConstraint.split('&')) #every & is a new line in clasp
+            claspInput = 'p cnf '+str(int(len(cls.symbolsList)/2)) + ' ' + str(len(clauses))
+            for c in clauses:
+                claspInput += '\n'
+                claspInput += ' '.join(c.split('|')) + ' 0' #split on ors and add spaces in between
+            # print('clasp input\n',claspName)
+            claspFile = './output.cnf'
+            with open(claspFile,'w') as o:
+                o.write(claspInput)
+            p = Popen(["clasp","./output.cnf","-n",str(n)],stdout=PIPE,stderr=PIPE)
+            stdout,stderr = p.communicate()
+            objectsList = cls.extractObjectsFromClaspOutput(str(stdout))
+        else:
+            top = Toplevel()
+            top.geometry("750x250")
+            top.title("ERROR")
+            Label(top, text=('ERROR NOT SATISFIABLE'), font=('18')).place(x=150,y=80)
+        return objectsList
 
     @classmethod
     def addToParsedAttributes(cls,attribute, index):
@@ -42,6 +98,7 @@ class DataObject:
         if(str(index) not in cls.symbolsList):
             cls.symbolsList.append(str(index))
         cls.parsedAttributes[attribute] = index
+        cls.parsedAttributesReversed[index] = attribute
         # print('@ add method',cls.parsedAttributes)
 
     @classmethod
@@ -51,6 +108,7 @@ class DataObject:
         '''
         cls.symbolsList = []
         cls.parsedAttributes = dict()
+        cls.parsedAttributesReversed = dict()
         print("CLEARED ATTRIBUTES DATA")
 
     @classmethod
@@ -102,11 +160,11 @@ class DataObject:
         print(cls.hardConstraints)
 
     @classmethod
-    def generateFeasibleObjects(cls):
+    def convertHardCToCNF(cls):
         '''
-        Decide whether there are feasible objects w.r.t hard constraints
+        Converts hard constraints to CNF
+        Adds to cls.hardConstraintsCNF
         '''
-        # print(cls.hardConstraints)
         symbolRep = symbols(" ,".join(cls.symbolsList))
         for term in cls.hardConstraints:
             evalStr = ''
@@ -120,8 +178,6 @@ class DataObject:
             print('evalStr:\t',evalStr)
             print('to_cnf(evalStr):\t',to_cnf(eval(evalStr)))
             cls.hardConstraintsCNF.append(str(to_cnf(eval(evalStr))))
-        #claspOutput = inputIntoClasp()
-        cls.checkSatisfy()
 
     @classmethod
     def checkSatisfy(cls):
@@ -130,7 +186,9 @@ class DataObject:
         p cnf #of attributes #of clauses
         ...hard constraints
         ...preferences TODO
+        :return True if SATISFIABLE else False
         '''
+        cls.convertHardCToCNF()
         clauses = []
         for cnfConstraint in cls.hardConstraintsCNF:
             clauses.extend(cnfConstraint.split('&')) #every & is a new line in clasp
@@ -152,7 +210,9 @@ class DataObject:
         top= Toplevel()
         top.geometry("750x250")
         top.title("Satisfiability Output")
-        Label(top, text=('FEASIBLE OBJECTS EXIST' if satisfy else 'FEASIBLE OBJECTS DO NOT EXIST'), font=('Ariel 18')).place(x=150,y=80)
+        Label(top, text=('FEASIBLE OBJECTS EXIST' if satisfy else 'FEASIBLE OBJECTS DO NOT EXIST'), font=('18')).place(x=150,y=80)
+        #cls.parseClaspOutput(str(stdout))
+        return satisfy
         # print('stderr\n',stderr)
 
 
@@ -238,7 +298,6 @@ class PreferencesObject(DataObject):
         '''
         Parse Preferences file
         '''
-        self.preferences()
         lines = fileData.split('\n')
         #print(lines)
         for line in lines:
@@ -263,7 +322,7 @@ class UI:
         self.frame = frame
         self.canvas = None
         self.uniqueTag = self.dataObject.type
-        self.createCanvas()
+        self.createCanvasForInputTab()
 
     def parseFileData(self,fileData):
         '''
@@ -298,13 +357,19 @@ class UI:
     def getType(self):
         return self.dataObject.type
 
-    def generateFeasibleObjects(self):
+    def checkSatisfy(self):
         '''
-        Call DataObject.generateFeasibleObjects()
+        Call DataObject.checkSatisfy()
         '''
-        self.dataObject.generateFeasibleObjects()
+        self.dataObject.checkSatisfy()
 
-    def createCanvas(self):
+    def exemplify(self):
+        '''
+        Call DataObject.exemplify()
+        '''
+        self.dataObject.exemplify()
+
+    def createCanvasForInputTab(self):
         '''
         Create Canvas to insert text
         '''
@@ -330,13 +395,13 @@ class UI:
         if(self.getType() != 'attr'):
             self.buttonsToDisable.append(b1)
         if(self.getType() == 'pref'):
-            b2=ttk.Button(self.frame, text="Check if Feasible Objects", command=self.generateFeasibleObjects)
+            b2=ttk.Button(self.frame, text="Check if Feasible Objects", command=self.checkSatisfy)
             b2.grid(column=8, row=1,pady=5)
-            b3=ttk.Button(self.frame, text="Exemplification", command=self.generateFeasibleObjects)
+            b3=ttk.Button(self.frame, text="Exemplification", command=self.exemplify)
             b3.grid(column=8, row=2, pady=5)
-            b4=ttk.Button(self.frame, text="Optimization", command=self.generateFeasibleObjects)
+            b4=ttk.Button(self.frame, text="Optimization", command=self.checkSatisfy)
             b4.grid(column=8, row=3, pady=5)
-            b5=ttk.Button(self.frame, text="Omni-Optimization", command=self.generateFeasibleObjects)
+            b5=ttk.Button(self.frame, text="Omni-Optimization", command=self.checkSatisfy)
             b5.grid(column=8, row=4, pady=5)
             self.buttonsToDisable.append(b2)
             self.buttonsToDisable.append(b3)
