@@ -17,7 +17,7 @@ class DataObject:
     binaryOperators = dict({'NOT':'~','OR':'|','AND':'&'})
     hardConstraints = [] #list of constraints
     hardConstraintsCNF = [] #list of constraints in CNF/digitized form
-    preferences = dict() #dict of preferences[key is preference name(Qualitative logic,Penality,Possibilistic)]: value is array of strings for each preference
+    preferences = dict({'Penalty Logic':[],'Possibilistic Logic':[],'Qualitative Choice Logic':[]}) #dict of preferences[key is preference name(Qualitative logic,Penalty,Possibilistic)]: value is list[[each preference clause in CNF,etc]]
     symbolsList = [] #for input into sympy.symbols()
 
     def __init__(self):
@@ -38,6 +38,46 @@ class DataObject:
         :returns name of filepath
         '''
         return self.fileName
+
+    @classmethod
+    def inputToClasp(cls,clauses,n):
+        '''
+        :clauses - cnf form
+        :n - input n = 0 to get all models from clasp
+        Run clasp with clauses
+        :return models from clasp output
+        '''
+        claspInput = 'p cnf '+str(int(len(cls.symbolsList)/2)) + ' ' + str(len(clauses))
+        for c in clauses:
+            claspInput += '\n'
+            claspInput += ' '.join(c.split('|')) + ' 0' #split on ors and add spaces in between
+        # print('clasp input\n',claspName)
+        claspFile = './output.cnf'
+        with open(claspFile,'w') as o:
+            o.write(claspInput)
+        p = Popen(["clasp","./output.cnf","-n",str(n)],stdout=PIPE,stderr=PIPE)
+        stdout,stderr = p.communicate()
+        # if(stderr): print('@inputToClasp stderr',stderr)
+        objectsList = cls.extractObjectsFromClaspOutput(str(stdout))
+        return objectsList
+        # print('@inputToClasp objectsList',objectsList)
+
+    @classmethod
+    def modelToString(cls,objects):
+        '''
+        :returns list of strings of objects from digitized form
+        '''
+        outputArr = []#array of strings
+        for o in objects:
+            nums = o.split()
+            objStr = '< '
+            for n in nums:
+                if(n != '0'):
+                    objStr +=  cls.parsedAttributesReversed.get(int(n)) + ' '
+            objStr += '>'
+            outputArr.append(objStr)
+        return outputArr
+
     @classmethod
     def exemplify(cls):
         '''
@@ -46,7 +86,59 @@ class DataObject:
         '''
         objectsList = []
         objectsList = cls.getNObjectsFromClasp(2)
-        print('@ exemplify() objectsList',objectsList)
+        print('Emplify random objects',objectsList)
+        print('Penalty dict',cls.preferences.get('Penalty Logic'))
+
+        # exemplify for Penalty logic
+        penaltyClauses = []
+        objectPenalties= [0,0] #object1 penalty,
+        for i in range(0,len(objectsList)):
+            # print('object in ObjectList',object.split())
+            # objectDict[object] = 0#initally 0 penalty
+            penaltyClauses = []
+            penaltyClauses.extend([o for o in objectsList[i].split() if o != '0'])
+            for value in cls.preferences.get('Penalty Logic'):
+                print('value[0]',value[0])
+                temp = penaltyClauses.copy()
+                temp.extend([v for v in value[0].split('&')])
+                models = cls.inputToClasp(temp,1)
+                if(models == None or models == []):
+                    #apply penalty value[1]
+                    # print('Apply penalty for object',object)
+                    # print('Apply penalty value',value)
+                    objectPenalties[i] += value[1]
+                # print('objectDict',objectPenalties)
+                # print('models',models)
+        if(objectPenalties[0] == objectPenalties[1]):
+            print('Objects are equivalent')
+            modelList = cls.modelToString(objectsList)
+            top1 = Toplevel()
+            top1.geometry("750x250")
+            top1.title("Exemplify")
+            popupText = 'Penalty Logic'
+            popupText += '\nObjects are equivalent'
+            for m in range(0,len(modelList)):
+                popupText += '\n' + str(m+1) + '.' + modelList[m]
+            Label(top1, text=(popupText), font=('12')).place(x=150,y=80)
+        else:
+            preferredObjectNum = objectPenalties.index(min(objectPenalties))
+            modelList = cls.modelToString(objectsList)
+            print('modelList',modelList)
+            print('preference',(preferredObjectNum+1))
+            top1 = Toplevel()
+            top1.geometry("750x250")
+            top1.title("Exemplify")
+            popupText = 'Penalty Logic'
+            popupText += '\nPreferred Object is '+ str(preferredObjectNum+1)
+            for m in range(0,len(modelList)):
+                popupText += '\n' + str(m+1) + '.' + modelList[m]
+            Label(top1, text=(popupText), font=('12')).place(x=150,y=80)
+
+        #exemplify for Possibilistic
+        
+        # print('object '+ str(preferredObjectNum+1) + ' is preferred')
+        # print('penaltyClauses after',penaltyClauses)
+        #print('@ exemplify() objectsList',objectsList)
 
     @classmethod
     def extractObjectsFromClaspOutput(cls,output):
@@ -82,6 +174,7 @@ class DataObject:
                 o.write(claspInput)
             p = Popen(["clasp","./output.cnf","-n",str(n)],stdout=PIPE,stderr=PIPE)
             stdout,stderr = p.communicate()
+            if(stderr): print('@getNObjectsFromClasp stderr',stderr)
             objectsList = cls.extractObjectsFromClaspOutput(str(stdout))
         else:
             top = Toplevel()
@@ -89,6 +182,13 @@ class DataObject:
             top.title("ERROR")
             Label(top, text=('ERROR NOT SATISFIABLE'), font=('18')).place(x=150,y=80)
         return objectsList
+
+    @classmethod
+    def addToPreferences(cls,key,value):
+        '''
+        Append to preferences dict[key].list.append()
+        '''
+        cls.preferences[key].append(value)
 
     @classmethod
     def addToParsedAttributes(cls,attribute, index):
@@ -178,6 +278,29 @@ class DataObject:
             print('evalStr:\t',evalStr)
             print('to_cnf(evalStr):\t',to_cnf(eval(evalStr)))
             cls.hardConstraintsCNF.append(str(to_cnf(eval(evalStr))))
+
+    @classmethod
+    def convertToCNF(cls,data):
+        '''
+        Convert data to CNF
+        '''
+        symbolRep = symbols(" ,".join(cls.symbolsList))
+        dataArr = data.split() #split by spaces
+        evalStr = ''
+        for d in dataArr:
+            # print('d in dataARR',d)
+            # print('getAttr',cls.getAttribute(d))
+            # print('(cls.getAttribute(d)) in cls.symbolsList',(cls.getAttribute(d)) in cls.symbolsList)
+            # print('symbolsList',cls.symbolsList)
+            dNum = str(cls.getAttribute(d))
+            if(dNum in cls.symbolsList):
+                index = cls.symbolsList.index(dNum)
+                evalStr += 'symbolRep['+str(index)+']'
+            else:
+                evalStr += ' ' +cls.binaryOperators.get(d)+' '
+        print('@ convertToCNF evalStr',evalStr)
+        print('@ convertToCNF to_cnf(evalStr):\t',to_cnf((eval(evalStr))))
+        return str(to_cnf((eval(evalStr))))
 
     @classmethod
     def checkSatisfy(cls):
@@ -294,15 +417,50 @@ class PreferencesObject(DataObject):
         self.setFileData(prefFileData)
         self.type = 'pref'
 
+    def transformPenaltyData(self,data):
+        '''
+        Transforms Penalty clause,Penalty to (CNF) Penalty clause,Penalty
+        Ex:gun AND cake, 10 -> [[gun,cake],10]
+        :returns transformedPenaltyList
+        '''
+        print('@ transformPenaltyData()',data)
+        PenaltyClause,PenaltyNum = [d.strip() for d in data.split(",")]
+        print('@ transformPenaltyData() PenaltyClause,PenaltyNum:' + PenaltyClause + ' ' +PenaltyNum)
+        PenaltyClauseCNF = self.convertToCNF(PenaltyClause)
+        return [PenaltyClauseCNF,int(PenaltyNum)]
+
     def parseFileData(self,fileData):
         '''
         Parse Preferences file
         '''
         lines = fileData.split('\n')
         #print(lines)
+        Penalty = False
+        possib = False
+        qualit = False
         for line in lines:
-            if(line != ''):
-                print(line)
+            if(line.strip() == ''):
+                continue
+            if(line == 'Penalty Logic'):
+                Penalty = True
+                qualit = False
+                possib = False
+                continue
+            elif(line == 'Possibilistic Logic'):
+                possib = True
+                Penalty = False
+                qualit = False
+                continue
+            elif(line == 'Qualitative Choice Logic'):
+                qualit = True
+                Penalty = False
+                possib = False
+                continue
+            if(Penalty):
+                transformedPenaltyData = self.transformPenaltyData(line)
+                print('@ parseFileData() transformedPenaltyData',transformedPenaltyData)
+                self.addToPreferences('Penalty Logic',transformedPenaltyData)
+        print('after adding to Penalty dict',self.preferences['Penalty Logic'])
 
 class UI:
     '''
