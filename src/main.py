@@ -79,6 +79,36 @@ class DataObject:
         return outputArr
 
     @classmethod
+    def checkIfQualitativeRowGreaterThan(cls,q1,q2):
+        '''
+        Check if q1 values greater than q2 if so return 1 else return 0
+        :q1 - row in qualitative matrix after being evaluated
+        :q2 - row to compare against in qualitative matrix after being evaluated
+        '''
+        #check if q1 and q2 are comparable
+        q1IsGreater = False
+        q2IsGreater = False
+        for i in range(0,len(q1)):
+            if(q1[i] == 'inf' and q2[i] != 'inf'):
+                q2IsGreater = True
+            elif(q1[i] != 'inf' and q2[i] == 'inf'):
+                q1IsGreater = True
+            elif(q1[i] > q2[i]):
+                q1IsGreater = True
+            elif(q1[i] < q2[i]):
+                q2IsGreater = True
+        if(q1IsGreater and q2IsGreater):
+            #incomparable rows
+            return 0
+        elif(q2IsGreater):
+            return 0
+        elif(q1IsGreater):
+            return 1
+        else:
+            #q1 and q2 probably equivalent
+            return 0
+
+    @classmethod
     def exemplify(cls):
         '''
         Generate, if possible, two random feasible objects, and show the
@@ -87,7 +117,7 @@ class DataObject:
         objectsList = []
         objectsList = cls.getNObjectsFromClasp(2)
         print('Emplify random objects',objectsList)
-        print('Penalty dict',cls.preferences.get('Penalty Logic'))
+        print('Preferences dict',cls.preferences)
 
         # exemplify for Penalty logic
         penaltyClauses = []
@@ -135,10 +165,96 @@ class DataObject:
             Label(top1, text=(popupText), font=('12')).place(x=150,y=80)
 
         #exemplify for Possibilistic
-        
-        # print('object '+ str(preferredObjectNum+1) + ' is preferred')
-        # print('penaltyClauses after',penaltyClauses)
-        #print('@ exemplify() objectsList',objectsList)
+        possibilisticClauses = []
+        objectPref= [1,1]
+        for i in range(0,len(objectsList)):
+            # print('object in ObjectList',object.split())
+            # objectDict[object] = 0#initally 0 penalty
+            possibilisticClauses = []
+            possibilisticClauses.extend([o for o in objectsList[i].split() if o != '0'])
+            for value in cls.preferences.get('Possibilistic Logic'):
+                # print('value[0]',value[0])
+                temp = possibilisticClauses.copy()
+                temp.extend([v for v in value[0].split('&')])
+                models = cls.inputToClasp(temp,1)
+                if(models == None or models == []):
+                    #Do 1 - possibilistic value
+                    # print('Apply penalty for object',object)
+                    # print('Apply penalty value',value)
+                    pref = 1 - value[1]
+                    if(objectPref[i]>pref):
+                        #the lowest preference wins out for each object
+                        objectPref[i] = pref
+                # print('objectDict',objectPenalties)
+                # print('models',models)
+        if(objectPref[0] == objectPref[1]):
+            print('Objects are equivalent')
+            modelList = cls.modelToString(objectsList)
+            # top1 = Toplevel()
+            # top1.geometry("750x250")
+            # top1.title("Exemplify")
+            # popupText = 'Penalty Logic'
+            # popupText += '\nObjects are equivalent'
+            # for m in range(0,len(modelList)):
+            #     popupText += '\n' + str(m+1) + '.' + modelList[m]
+            # Label(top1, text=(popupText), font=('12')).place(x=150,y=80)
+        else:
+            preferredObjectNum = objectPref.index(max(objectPref))
+            modelList = cls.modelToString(objectsList)
+            print('modelList',modelList)
+            print('possibilistic preference',(preferredObjectNum+1))
+            # top1 = Toplevel()
+            # top1.geometry("750x250")
+            # top1.title("Exemplify")
+            # popupText = 'Penalty Logic'
+            # popupText += '\nPreferred Object is '+ str(preferredObjectNum+1)
+            # for m in range(0,len(modelList)):
+            #     popupText += '\n' + str(m+1) + '.' + modelList[m]
+            # Label(top1, text=(popupText), font=('12')).place(x=150,y=80)
+
+        #exemplify for Qualitative
+        qualitativeMatrix = [['inf','inf'],['inf','inf']] #list of lists each list inside will be for a single object
+        clauseNum = 0 #which clause am I on?
+        for i in range(0,len(objectsList)):
+            for value in cls.preferences.get('Qualitative Choice Logic'):
+                qualClause = value[0] #dict
+                implies = value[1] #digitized value of implication attribute
+                if(implies != None):
+                    print('implies,objectsList[i]:' +str(implies) + ' ' +objectsList[i])
+                    print('re.match(str(implies),objectsList[i]',re.match(str(implies),objectsList[i]))
+                    implicationPass = re.match(str(implies),objectsList[i])
+                    if(implicationPass == None):
+                        continue
+                claspInput = []
+                claspInput.extend([o for o in objectsList[i].split() if o != '0'])
+                for partOfClause,partOfClauseOrder in qualClause.items():
+                    print('typeof partOfClauseOrder',type(partOfClauseOrder))
+                    claspInput.extend([v for v in partOfClause.split('&')])
+                    models = cls.inputToClasp(claspInput,1)
+                    if(models == None or models == []):
+                        #clause not matched
+                        continue
+                    else:
+                        #clause matched
+                        if(qualitativeMatrix[i][clauseNum] == 'inf' or qualitativeMatrix[i][clauseNum] > partOfClauseOrder):
+                            #a greater priority partialClause has passed
+                            #ex: gun and car BT gun and cake. gun and car passed so update with 1 in this case
+                            qualitativeMatrix[i][clauseNum] = partOfClauseOrder
+                clauseNum += 1 #moving on to next clause
+
+        #figure out precedence for qualitative logic in exemplify()
+        qGreaterThan = [0]*len(qualitativeMatrix) #how many times is qualitative matrix row at q(see below) greater than all of the other rows
+        for q in range(0,len(qualitativeMatrix)):
+            for qual in qualitativeMatrix:
+                qGreaterThan[q] += cls.checkIfQualitativeRowGreaterThan(qualitativeMatrix[q],qual)
+
+        print('qualitative matrix after',qualitativeMatrix)
+        print('QualClauses',cls.preferences.get('Qualitative Choice Logic'))
+        print('Generated objects',objectsList)
+        if(qGreaterThan[0] == qGreaterThan[1]):
+            print('Objects are equivalent according QCL')
+        else:
+            print('Preference is for object:',(qGreaterThan.index(max(qGreaterThan))+1))
 
     @classmethod
     def extractObjectsFromClaspOutput(cls,output):
@@ -146,7 +262,7 @@ class DataObject:
         Find objects from clasp output
         :returns list of objects
         '''
-        print('Clasp output',output)
+        # print('Clasp output',output)
         # print('Clasp output type',type(output))
         # print('Satisfiable models\n',re.findall(r'-?[0-9] -?[0-9] -?[0-9] -?[0-9] -?[0-9] -?[0-9] -?[0-9] -?[0-9] 0',output))
         regexToExtractObjects = r'-?[0-9] '*(int(len(cls.symbolsList)/2)) + r'0'
@@ -174,7 +290,7 @@ class DataObject:
                 o.write(claspInput)
             p = Popen(["clasp","./output.cnf","-n",str(n)],stdout=PIPE,stderr=PIPE)
             stdout,stderr = p.communicate()
-            if(stderr): print('@getNObjectsFromClasp stderr',stderr)
+            # if(stderr): print('@getNObjectsFromClasp stderr',stderr)
             objectsList = cls.extractObjectsFromClaspOutput(str(stdout))
         else:
             top = Toplevel()
@@ -275,17 +391,19 @@ class DataObject:
                 else:
                     #letter will be AND(&), OR(|)
                     evalStr += letter
-            print('evalStr:\t',evalStr)
-            print('to_cnf(evalStr):\t',to_cnf(eval(evalStr)))
+            # print('evalStr:\t',evalStr)
+            # print('to_cnf(evalStr):\t',to_cnf(eval(evalStr)))
             cls.hardConstraintsCNF.append(str(to_cnf(eval(evalStr))))
 
     @classmethod
-    def convertToCNF(cls,data):
+    def convertToCNF(cls,clause):
         '''
         Convert data to CNF
+        :clause - singular clause with ANDs and ORs no extra info
+        :return CNF converted string
         '''
         symbolRep = symbols(" ,".join(cls.symbolsList))
-        dataArr = data.split() #split by spaces
+        dataArr = clause.split() #split by spaces
         evalStr = ''
         for d in dataArr:
             # print('d in dataARR',d)
@@ -298,9 +416,33 @@ class DataObject:
                 evalStr += 'symbolRep['+str(index)+']'
             else:
                 evalStr += ' ' +cls.binaryOperators.get(d)+' '
-        print('@ convertToCNF evalStr',evalStr)
-        print('@ convertToCNF to_cnf(evalStr):\t',to_cnf((eval(evalStr))))
+        # print('@ convertToCNF evalStr',evalStr)
+        # print('@ convertToCNF to_cnf(evalStr):\t',to_cnf((eval(evalStr))))
         return str(to_cnf((eval(evalStr))))
+
+    # @classmethod
+    # def convertToCNFforQualitative(cls,data):
+    #     '''
+    #     Convert data to CNF for Qualitative Choice Logic
+    #     :returns CNF converted string
+    #     '''
+    #     symbolRep = symbols(" ,".join(cls.symbolsList))
+    #     dataArr = data.split() #split by spaces
+    #     evalStr = ''
+    #     for d in dataArr:
+    #         # print('d in dataARR',d)
+    #         # print('getAttr',cls.getAttribute(d))
+    #         # print('(cls.getAttribute(d)) in cls.symbolsList',(cls.getAttribute(d)) in cls.symbolsList)
+    #         # print('symbolsList',cls.symbolsList)
+    #         dNum = str(cls.getAttribute(d))
+    #         if(dNum in cls.symbolsList):
+    #             index = cls.symbolsList.index(dNum)
+    #             evalStr += 'symbolRep['+str(index)+']'
+    #         else:
+    #             evalStr += ' ' +cls.binaryOperators.get(d)+' '
+    #     print('@ convertToCNF evalStr',evalStr)
+    #     print('@ convertToCNF to_cnf(evalStr):\t',to_cnf((eval(evalStr))))
+    #     return str(to_cnf((eval(evalStr))))
 
     @classmethod
     def checkSatisfy(cls):
@@ -423,11 +565,38 @@ class PreferencesObject(DataObject):
         Ex:gun AND cake, 10 -> [[gun,cake],10]
         :returns transformedPenaltyList
         '''
-        print('@ transformPenaltyData()',data)
+        # print('@ transformPenaltyData()',data)
         PenaltyClause,PenaltyNum = [d.strip() for d in data.split(",")]
-        print('@ transformPenaltyData() PenaltyClause,PenaltyNum:' + PenaltyClause + ' ' +PenaltyNum)
+        # print('@ transformPenaltyData() PenaltyClause,PenaltyNum:' + PenaltyClause + ' ' +PenaltyNum)
         PenaltyClauseCNF = self.convertToCNF(PenaltyClause)
         return [PenaltyClauseCNF,int(PenaltyNum)]
+
+    def transformPossibilisticData(self,data):
+        '''
+        Transforms Possibilistic clause,Preference to (CNF) Possibilistic clause,Preference
+        Ex:gun AND cake, 10 -> [[gun,cake],10]
+        :returns transformedPossibilisticList
+        '''
+        # print('@ transformPossiData()',data)
+        possiClause,possiNum = [d.strip() for d in data.split(",")]
+        # print('@ transformPossiData() PossiClause,PossiNum:' + possiClause + ' ' +possiNum)
+        possiClauseCNF = self.convertToCNF(possiClause)
+        return [possiClauseCNF,float(possiNum)]
+
+    def transformQualitativeChoiceData(self,data):
+        '''
+        :returns [{clause CNF form,orderNum},IF]
+        '''
+        # print('transform qualitative choice data:',data)
+        qualClauseStr,qualImplies = [i.strip() for i in data.split('IF')]
+        qualClauses = [i.strip() for i in qualClauseStr.split('BT')]
+        # print('@transform qual data qualClause,qualImplies' + qualClauseStr +','+qualImplies)
+        tempDict = dict()
+        for j in range(0,len(qualClauses)):
+            qualCNFStr = self.convertToCNF(qualClauses[j])
+            # print('qualCNFstr',qualCNFStr)
+            tempDict[qualCNFStr] = (j+1) #order of clause is (j+1)
+        return [tempDict,self.getAttribute(qualImplies)]
 
     def parseFileData(self,fileData):
         '''
@@ -435,32 +604,40 @@ class PreferencesObject(DataObject):
         '''
         lines = fileData.split('\n')
         #print(lines)
-        Penalty = False
+        penalty = False
         possib = False
         qualit = False
         for line in lines:
             if(line.strip() == ''):
                 continue
             if(line == 'Penalty Logic'):
-                Penalty = True
+                penalty = True
                 qualit = False
                 possib = False
                 continue
             elif(line == 'Possibilistic Logic'):
                 possib = True
-                Penalty = False
+                penalty = False
                 qualit = False
                 continue
             elif(line == 'Qualitative Choice Logic'):
                 qualit = True
-                Penalty = False
+                penalty = False
                 possib = False
                 continue
-            if(Penalty):
+            if(penalty):
                 transformedPenaltyData = self.transformPenaltyData(line)
-                print('@ parseFileData() transformedPenaltyData',transformedPenaltyData)
+                # print('@ parseFileData() transformedPenaltyData',transformedPenaltyData)
                 self.addToPreferences('Penalty Logic',transformedPenaltyData)
-        print('after adding to Penalty dict',self.preferences['Penalty Logic'])
+            elif(possib):
+                transformedPossibilisticData = self.transformPossibilisticData(line)
+                # print('@ parseFileData() transformedPossibilisticData',transformedPossibilisticData)
+                self.addToPreferences('Possibilistic Logic',transformedPossibilisticData)
+            elif(qualit):
+                transformedQualitativeData = self.transformQualitativeChoiceData(line)
+                # print('@ parseFileData() transformedQualitativeData',transformedQualitativeData)
+                self.addToPreferences('Qualitative Choice Logic',transformedQualitativeData)
+        print('after adding to Preferences datastructure',self.preferences)
 
 class UI:
     '''
@@ -468,11 +645,12 @@ class UI:
     '''
 
     #static class variable
-    global columnNum, buttonText
+    global columnNum, columnNum2, buttonText
     columnNum = 0
+    columnNum2 = 0 #for tab2
     buttonText = {'attr':"Attributes", 'hardc':"Hard Constraints", 'pref':"Preferences"}
     buttonsToDisable = [] #list of buttons to disable and enable
-    def __init__(self,dataObject,frame):
+    def __init__(self,dataObject,frame,tab='tab1'):
         '''
         Initialize UI object. Window has already been initialized. Canvas becomes a instance of every UI object
         '''
@@ -480,7 +658,10 @@ class UI:
         self.frame = frame
         self.canvas = None
         self.uniqueTag = self.dataObject.type
-        self.createCanvasForInputTab()
+        if(tab=='tab1'):
+            self.createCanvasForInputTab()
+        elif(tab=='tab2'):
+            self.createCanvasForOutputTab()
 
     def parseFileData(self,fileData):
         '''
@@ -568,6 +749,47 @@ class UI:
         columnNum +=2 #for tab1 placement
         self.disableButtons()
 
+    def createCanvasForOutputTab(self):
+        '''
+        Create Canvas to insert text
+        '''
+        global columnNum2, buttonText
+
+        #scrollbar
+        h = ttk.Scrollbar(self.frame, orient=HORIZONTAL)
+        v = ttk.Scrollbar(self.frame, orient=VERTICAL)
+
+        #create canvas
+        self.canvas = Canvas(self.frame, width=250, height=300, bg="white", scrollregion=(0, 0, 1000, 1000), yscrollcommand=v.set, xscrollcommand=h.set)
+        h['command'] = self.canvas.xview
+        v['command'] = self.canvas.yview
+
+        self.canvas.grid(column=columnNum, row=0,padx=20, sticky=(N,W,E,S))
+        h.grid(column=columnNum, row=1, sticky=(W,E))
+        v.grid(column=(columnNum+1), row=0, sticky=(N,S))
+
+        #button to insert
+        ttk.Label(self.frame, text=buttonText[self.getType()],borderwidth=3, relief="raised").grid(column=columnNum, row=2)
+        # b1 = ttk.Button(self.frame, text="Insert a file", command=self.selectFile)
+        # b1.grid(column=columnNum, row=3)
+        # if(self.getType() != 'attr'):
+        #     self.buttonsToDisable.append(b1)
+        # if(self.getType() == 'pref'):
+        #     b2=ttk.Button(self.frame, text="Check if Feasible Objects", command=self.checkSatisfy)
+        #     b2.grid(column=8, row=1,pady=5)
+        #     b3=ttk.Button(self.frame, text="Exemplification", command=self.exemplify)
+        #     b3.grid(column=8, row=2, pady=5)
+        #     b4=ttk.Button(self.frame, text="Optimization", command=self.checkSatisfy)
+        #     b4.grid(column=8, row=3, pady=5)
+        #     b5=ttk.Button(self.frame, text="Omni-Optimization", command=self.checkSatisfy)
+        #     b5.grid(column=8, row=4, pady=5)
+            # self.buttonsToDisable.append(b2)
+            # self.buttonsToDisable.append(b3)
+            # self.buttonsToDisable.append(b4)
+            # self.buttonsToDisable.append(b5)
+        columnNum +=2 #for tab1 placement
+        # self.disableButtons()
+
     @classmethod
     def disableButtons(cls):
         '''
@@ -654,5 +876,10 @@ hardCUI = UI(hardCObj,frame1)
 #Create Preferences UI
 prefObj = PreferencesObject()
 prefUI = UI(prefObj, frame1)
+
+#create output page
+outputUI1 = UI(attrObj,frame2,'tab2')
+outputUI2 = UI(hardCObj,frame2,'tab2')
+outputUI3 = UI(prefObj,frame2,'tab2')
 
 root.mainloop()
