@@ -3,6 +3,7 @@ from tkinter import ttk
 from tkinter import filedialog
 from tkinter import Canvas
 from tkinter import Scrollbar
+from typing import OrderedDict
 from sympy import to_cnf,symbols
 from subprocess import Popen,PIPE
 import re
@@ -123,7 +124,7 @@ class DataObject:
         optimizeOutputStr += '\n'
 
         #optimize for Penalty logic
-        optimizeOutputStr += 'An Optimal Object for Penalty Logic -> '
+        optimizeOutputStr += 'Penalty Logic -> '
         objectPenalties = [0]*len(objectsList)
         for i in range(0,len(objectsList)):
             penaltyClauses = []
@@ -142,8 +143,8 @@ class DataObject:
 
         #optimize for Possibilistic Logic
         possibilisticClauses = []
-        objectPref= [1,1]
-        optimizeOutputStr += 'An Optimal Object for Possibilistic Logic -> '
+        objectPref= [1]*len(objectsList)
+        optimizeOutputStr += 'Possibilistic Logic -> '
         for i in range(0,len(objectsList)):
             possibilisticClauses = []
             possibilisticClauses.extend([o for o in objectsList[i].split() if o != '0'])
@@ -157,7 +158,68 @@ class DataObject:
                         #the lowest preference wins out for each object
                         objectPref[i] = pref
 
-        indexList = [index for index, value in enumerate(objectPenalties) if value == min(objectPenalties)]
+        indexList = [index for index, value in enumerate(objectPref) if value == max(objectPref)]
+        preferredObjectNum = indexList.pop()
+        optimizeOutputStr += 'Object '+str((preferredObjectNum+1)) + ' is an optimal object.\n'
+
+        #optimize for Qualitative Choice Logic
+        qualitativeMatrix = [] #list of lists each list inside will be for a single object
+        for objectNum in range(0,len(objectsList)):
+            qualitativeMatrix.append(['inf','inf'])
+
+        # print('Qualitative Matrix initialized',qualitativeMatrix)
+        qualRuleNum = 0 #which clause am I on?
+        optimizeOutputStr += 'Qualitative Choice Logic -> '
+        for i in range(0,len(objectsList)):
+            qualRuleNum = 0
+            for value in cls.preferences.get('Qualitative Choice Logic'):
+                qualClause = value[0] #dict
+                implies = value[1] #digitized value of implication attribute
+                # print('qualClause',qualClause)
+                if(implies != None):
+                    impliesRegex = str(implies)
+                    if(implies > 0):
+                        impliesRegex = '[^-]'+str(implies)
+                    # print('implies,objectsList[i]:' +str(implies) + ' ' +objectsList[i])
+                    # print('re.match(str(implies),objectsList[i]',re.search(str(impliesRegex),objectsList[i]))
+                    implicationPass = re.search(impliesRegex,objectsList[i])
+                    if(implicationPass == None):
+                        #implication does not pass -> GoTo next qualitative rule
+                        # print('Implies rule failed go to next rule',qualClause)
+                        qualRuleNum += 1
+                        continue
+                #populate qualitative matrix
+                claspInput = []
+                claspInput.extend([o for o in objectsList[i].split() if o != '0'])
+                for partOfClause,partOfClauseOrder in qualClause.items():
+                    # print('typeof partOfClauseOrder',type(partOfClauseOrder))
+                    # print('qualClause',qualClause)
+                    # print('objectsList[i]',objectsList[i])
+                    claspInput.extend([v for v in partOfClause.split('&')])
+                    models = cls.inputToClasp(claspInput,1)
+                    if(models == None or models == []):
+                        #clause not matched
+                        continue
+                    else:
+                        #clause matched
+                        if(qualitativeMatrix[i][qualRuleNum] == 'inf' or qualitativeMatrix[i][qualRuleNum] > partOfClauseOrder):
+                            #a greater priority partialClause has passed
+                            #ex: gun and car BT gun and cake. gun and car passed so update with 1 in this case
+
+                            # print('qualitativeMatrix[i]',qualitativeMatrix[i])
+                            qualitativeMatrix[i][qualRuleNum] = partOfClauseOrder
+                qualRuleNum += 1 #moving on to next clause
+
+        print('Qualitative Choice Logic matrix',qualitativeMatrix)
+        #figure out preference for qualitative logic
+        #after table is created
+        qOptimal = [0]*len(qualitativeMatrix) #this variable will contain how many times is qualitative matrix row at q(see below) greater than all of the other rows
+        for q in range(0,len(qualitativeMatrix)):
+            for qual in qualitativeMatrix:
+                qOptimal[q] += cls.checkIfQualitativeRowGreaterThan(qualitativeMatrix[q],qual)
+
+        # print('Qualitative Choice Logic matrix',qualitativeMatrix)
+        indexList = [index for index, value in enumerate(qOptimal) if value == max(qOptimal)]
         preferredObjectNum = indexList.pop()
         optimizeOutputStr += 'Object '+str((preferredObjectNum+1)) + ' is an optimal object.\n'
 
@@ -287,14 +349,19 @@ class DataObject:
         clauseNum = 0 #which clause am I on?
         exemplifyOutputStr += 'Qualitative Choice Logic -> '
         for i in range(0,len(objectsList)):
+            clauseNum = 0
             for value in cls.preferences.get('Qualitative Choice Logic'):
                 qualClause = value[0] #dict
                 implies = value[1] #digitized value of implication attribute
                 if(implies != None):
+                    impliesRegex = str(implies)
+                    if(implies > 0):
+                        impliesRegex = '[^-]'+str(implies)
+                    implicationPass = re.search(impliesRegex,objectsList[i])
                     print('implies,objectsList[i]:' +str(implies) + ' ' +objectsList[i])
-                    print('re.match(str(implies),objectsList[i]',re.match(str(implies),objectsList[i]))
-                    implicationPass = re.match(str(implies),objectsList[i])
+                    print('re.match(str(implies),objectsList[i]',re.search(str(impliesRegex),objectsList[i]))
                     if(implicationPass == None):
+                        clauseNum += 1
                         continue
                 claspInput = []
                 claspInput.extend([o for o in objectsList[i].split() if o != '0'])
@@ -672,7 +739,7 @@ class PreferencesObject(DataObject):
         qualClauseStr,qualImplies = [i.strip() for i in data.split('IF')]
         qualClauses = [i.strip() for i in qualClauseStr.split('BT')]
         # print('@transform qual data qualClause,qualImplies' + qualClauseStr +','+qualImplies)
-        tempDict = dict()
+        tempDict = OrderedDict()
         for j in range(0,len(qualClauses)):
             qualCNFStr = self.convertToCNF(qualClauses[j])
             # print('qualCNFstr',qualCNFStr)
