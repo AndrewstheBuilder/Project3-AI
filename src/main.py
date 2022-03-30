@@ -109,17 +109,36 @@ class DataObject:
             return 0
 
     @classmethod
+    def optimize(cls):
+        '''
+        find an optimal object w.r.t T.
+        '''
+        objectsList = []
+        objectsList = cls.getNObjectsFromClasp(0)
+        print('@optimize all objects',objectsList)
+
+    @classmethod
     def exemplify(cls):
         '''
         Generate, if possible, two random feasible objects, and show the
         preference between the two (strict preference or equivalence) w.r.t T
+        :returns output as string
         '''
         objectsList = []
         objectsList = cls.getNObjectsFromClasp(2)
+
+        exemplifyOutputStr = 'EXEMPLIFICATION\n\n'
+        modelList = cls.modelToString(objectsList)
+        exemplifyOutputStr += 'Random Objects Generated:\n'
+        for m in range(0,len(modelList)):
+            exemplifyOutputStr += 'Object '+str(m+1) + '.' + modelList[m] +'\n'
+        exemplifyOutputStr += '\n'
+
         print('Emplify random objects',objectsList)
         print('Preferences dict',cls.preferences)
 
         # exemplify for Penalty logic
+        exemplifyOutputStr += 'Penalty Logic Preference -> '
         penaltyClauses = []
         objectPenalties= [0,0] #object1 penalty,
         for i in range(0,len(objectsList)):
@@ -141,32 +160,35 @@ class DataObject:
                 # print('models',models)
         if(objectPenalties[0] == objectPenalties[1]):
             print('Objects are equivalent')
-            modelList = cls.modelToString(objectsList)
-            top1 = Toplevel()
-            top1.geometry("750x250")
-            top1.title("Exemplify")
-            popupText = 'Penalty Logic'
-            popupText += '\nObjects are equivalent'
-            for m in range(0,len(modelList)):
-                popupText += '\n' + str(m+1) + '.' + modelList[m]
-            Label(top1, text=(popupText), font=('12')).place(x=150,y=80)
+            exemplifyOutputStr += 'Objects are equivalent.\n'
+            # modelList = cls.modelToString(objectsList)
+            # top1 = Toplevel()
+            # top1.geometry("750x250")
+            # top1.title("Exemplify")
+            # popupText = 'Penalty Logic'
+            # popupText += '\nObjects are equivalent'
+            # for m in range(0,len(modelList)):
+            #     popupText += '\n' + str(m+1) + '.' + modelList[m]
+            # Label(top1, text=(popupText), font=('12')).place(x=150,y=80)
         else:
             preferredObjectNum = objectPenalties.index(min(objectPenalties))
             modelList = cls.modelToString(objectsList)
-            print('modelList',modelList)
+            # print('modelList',modelList)
             print('preference',(preferredObjectNum+1))
-            top1 = Toplevel()
-            top1.geometry("750x250")
-            top1.title("Exemplify")
-            popupText = 'Penalty Logic'
-            popupText += '\nPreferred Object is '+ str(preferredObjectNum+1)
-            for m in range(0,len(modelList)):
-                popupText += '\n' + str(m+1) + '.' + modelList[m]
-            Label(top1, text=(popupText), font=('12')).place(x=150,y=80)
+            exemplifyOutputStr += 'Object '+str((preferredObjectNum+1)) + ' is preferred.\n'
+            # top1 = Toplevel()
+            # top1.geometry("750x250")
+            # top1.title("Exemplify")
+            # popupText = 'Penalty Logic'
+            # popupText += '\nPreferred Object is '+ str(preferredObjectNum+1)
+            # for m in range(0,len(modelList)):
+            #     popupText += '\n' + str(m+1) + '.' + modelList[m]
+            # Label(top1, text=(popupText), font=('12')).place(x=150,y=80)
 
         #exemplify for Possibilistic
         possibilisticClauses = []
         objectPref= [1,1]
+        exemplifyOutputStr += 'Possibilistic Logic preference -> '
         for i in range(0,len(objectsList)):
             # print('object in ObjectList',object.split())
             # objectDict[object] = 0#initally 0 penalty
@@ -189,6 +211,7 @@ class DataObject:
                 # print('models',models)
         if(objectPref[0] == objectPref[1]):
             print('Objects are equivalent')
+            exemplifyOutputStr += 'Objects are equivalent.\n'
             modelList = cls.modelToString(objectsList)
             # top1 = Toplevel()
             # top1.geometry("750x250")
@@ -203,6 +226,7 @@ class DataObject:
             modelList = cls.modelToString(objectsList)
             print('modelList',modelList)
             print('possibilistic preference',(preferredObjectNum+1))
+            exemplifyOutputStr += 'Object ' + str((preferredObjectNum+1)) + ' is preferred.\n'
             # top1 = Toplevel()
             # top1.geometry("750x250")
             # top1.title("Exemplify")
@@ -215,6 +239,7 @@ class DataObject:
         #exemplify for Qualitative
         qualitativeMatrix = [['inf','inf'],['inf','inf']] #list of lists each list inside will be for a single object
         clauseNum = 0 #which clause am I on?
+        exemplifyOutputStr += 'Qualitative Choice Logic -> '
         for i in range(0,len(objectsList)):
             for value in cls.preferences.get('Qualitative Choice Logic'):
                 qualClause = value[0] #dict
@@ -253,8 +278,11 @@ class DataObject:
         print('Generated objects',objectsList)
         if(qGreaterThan[0] == qGreaterThan[1]):
             print('Objects are equivalent according QCL')
+            exemplifyOutputStr += 'Objects are equivalent.\n'
         else:
             print('Preference is for object:',(qGreaterThan.index(max(qGreaterThan))+1))
+            exemplifyOutputStr += 'Object ' + str((qGreaterThan.index(max(qGreaterThan))+1)) + ' is preferred.\n'
+        return exemplifyOutputStr
 
     @classmethod
     def extractObjectsFromClaspOutput(cls,output):
@@ -276,7 +304,7 @@ class DataObject:
         :returns objectsList - n objects in digitized form
         '''
         objectsList = []
-        if(cls.checkSatisfy() == True):
+        if(cls.checkSatisfyBoolean() == True):
             clauses = []
             for cnfConstraint in cls.hardConstraintsCNF:
                 clauses.extend(cnfConstraint.split('&')) #every & is a new line in clasp
@@ -445,12 +473,13 @@ class DataObject:
     #     return str(to_cnf((eval(evalStr))))
 
     @classmethod
-    def checkSatisfy(cls):
+    def checkSatisfyBoolean(cls):
         '''
         clasp format:
         p cnf #of attributes #of clauses
         ...hard constraints
-        ...preferences TODO
+        ...preferences
+        ...clauses
         :return True if SATISFIABLE else False
         '''
         cls.convertHardCToCNF()
@@ -472,15 +501,21 @@ class DataObject:
         # print('stdout\n',stdout)
         print('UNSATISFIABLE:\t','UNSATISFIABLE' in str(stdout))
         satisfy = not 'UNSATISFIABLE' in str(stdout)
-        top= Toplevel()
-        top.geometry("750x250")
-        top.title("Satisfiability Output")
-        Label(top, text=('FEASIBLE OBJECTS EXIST' if satisfy else 'FEASIBLE OBJECTS DO NOT EXIST'), font=('18')).place(x=150,y=80)
+        # top= Toplevel()
+        # top.geometry("750x250")
+        # top.title("Satisfiability Output")
+        # Label(top, text=('FEASIBLE OBJECTS EXIST' if satisfy else 'FEASIBLE OBJECTS DO NOT EXIST'), font=('18')).place(x=150,y=80)
         #cls.parseClaspOutput(str(stdout))
         return satisfy
         # print('stderr\n',stderr)
 
-
+    @classmethod
+    def checkSatisfy(cls):
+        '''
+        :return output string
+        '''
+        satisfy = cls.checkSatisfyBoolean()
+        return 'FEASIBLE OBJECTS EXIST' if satisfy else 'FEASIBLE OBJECTS DO NOT EXIST'
 
 
 #
@@ -650,18 +685,35 @@ class UI:
     columnNum2 = 0 #for tab2
     buttonText = {'attr':"Attributes", 'hardc':"Hard Constraints", 'pref':"Preferences"}
     buttonsToDisable = [] #list of buttons to disable and enable
-    def __init__(self,dataObject,frame,tab='tab1'):
+    def __init__(self,dataObject,frame,frame2,tab='tab1'):
         '''
         Initialize UI object. Window has already been initialized. Canvas becomes a instance of every UI object
         '''
         self.dataObject = dataObject
         self.frame = frame
+        self.frame2 = frame2
         self.canvas = None
         self.uniqueTag = self.dataObject.type
-        if(tab=='tab1'):
-            self.createCanvasForInputTab()
-        elif(tab=='tab2'):
-            self.createCanvasForOutputTab()
+        self.createCanvasForInputTab()
+        self.createCanvasForOutputTab()
+
+        # #scrollbar
+        # h = ttk.Scrollbar(self.frame, orient=HORIZONTAL)
+        # v = ttk.Scrollbar(self.frame, orient=VERTICAL)
+
+        # #create canvas
+        # self.canvas2 = Canvas(frame2, width=750, height=300, bg="white", scrollregion=(0, 0, 3000, 3000), yscrollcommand=v.set, xscrollcommand=h.set)
+        # h['command'] = self.canvas2.xview
+        # v['command'] = self.canvas2.yview
+
+        # self.canvas2.grid(column=columnNum2, row=0,padx=20, sticky=(N,W,E,S))
+        # h.grid(column=columnNum2, row=1, sticky=(W,E))
+        # v.grid(column=(columnNum2+1), row=0, sticky=(N,S))
+
+        # if(tab=='tab1'):
+
+        # elif(tab=='tab2'):
+        #     self.createCanvasForOutputTab()
 
     def parseFileData(self,fileData):
         '''
@@ -700,13 +752,25 @@ class UI:
         '''
         Call DataObject.checkSatisfy()
         '''
-        self.dataObject.checkSatisfy()
+        self.canvas2.delete(self.uniqueTag)
+        output = self.dataObject.checkSatisfy()
+        self.canvas2.create_text(10, 10, text=output, anchor='nw', tag=self.uniqueTag)
 
     def exemplify(self):
         '''
         Call DataObject.exemplify()
         '''
-        self.dataObject.exemplify()
+        self.canvas2.delete(self.uniqueTag)
+        output = self.dataObject.exemplify()
+        self.canvas2.create_text(10, 10, text=output, anchor='nw', tag=self.uniqueTag)
+
+    def optimize(self):
+        '''
+        Call DataObject.optimize()
+        '''
+        self.canvas2.delete(self.uniqueTag)
+        output = self.dataObject.optimize()
+        self.canvas2.create_text(10, 10, text=output, anchor='nw', tag=self.uniqueTag)
 
     def createCanvasForInputTab(self):
         '''
@@ -738,7 +802,7 @@ class UI:
             b2.grid(column=8, row=1,pady=5)
             b3=ttk.Button(self.frame, text="Exemplification", command=self.exemplify)
             b3.grid(column=8, row=2, pady=5)
-            b4=ttk.Button(self.frame, text="Optimization", command=self.checkSatisfy)
+            b4=ttk.Button(self.frame, text="Optimization", command=self.optimize)
             b4.grid(column=8, row=3, pady=5)
             b5=ttk.Button(self.frame, text="Omni-Optimization", command=self.checkSatisfy)
             b5.grid(column=8, row=4, pady=5)
@@ -755,21 +819,22 @@ class UI:
         '''
         global columnNum2, buttonText
 
+        outputDict = {'attr':'Penalty Logic', 'hardc':'Possibilistic Logic','pref':'Qualitative Choice Logic'}
         #scrollbar
-        h = ttk.Scrollbar(self.frame, orient=HORIZONTAL)
-        v = ttk.Scrollbar(self.frame, orient=VERTICAL)
+        h = ttk.Scrollbar(self.frame2, orient=HORIZONTAL)
+        v = ttk.Scrollbar(self.frame2, orient=VERTICAL)
 
         #create canvas
-        self.canvas = Canvas(self.frame, width=250, height=300, bg="white", scrollregion=(0, 0, 1000, 1000), yscrollcommand=v.set, xscrollcommand=h.set)
-        h['command'] = self.canvas.xview
-        v['command'] = self.canvas.yview
+        self.canvas2 = Canvas(self.frame2, width=750, height=300, bg="white", scrollregion=(0, 0, 3000, 3000), yscrollcommand=v.set, xscrollcommand=h.set)
+        h['command'] = self.canvas2.xview
+        v['command'] = self.canvas2.yview
 
-        self.canvas.grid(column=columnNum, row=0,padx=20, sticky=(N,W,E,S))
-        h.grid(column=columnNum, row=1, sticky=(W,E))
-        v.grid(column=(columnNum+1), row=0, sticky=(N,S))
+        self.canvas2.grid(column=columnNum2, row=0,padx=20, sticky=(N,W,E,S))
+        h.grid(column=columnNum2, row=1, sticky=(W,E))
+        v.grid(column=(columnNum2+1), row=0, sticky=(N,S))
 
-        #button to insert
-        ttk.Label(self.frame, text=buttonText[self.getType()],borderwidth=3, relief="raised").grid(column=columnNum, row=2)
+        #ttk.Label(self.frame, text='Preference Output',borderwidth=3, relief="raised").grid(column=columnNum2, row=2)
+        #ttk.Label(self.frame, text=outputDict.get(self.getType()),borderwidth=3, relief="raised").grid(column=columnNum2, row=2)
         # b1 = ttk.Button(self.frame, text="Insert a file", command=self.selectFile)
         # b1.grid(column=columnNum, row=3)
         # if(self.getType() != 'attr'):
@@ -787,7 +852,7 @@ class UI:
             # self.buttonsToDisable.append(b3)
             # self.buttonsToDisable.append(b4)
             # self.buttonsToDisable.append(b5)
-        columnNum +=2 #for tab1 placement
+        # columnNum2 +=2 #for tab2 placement
         # self.disableButtons()
 
     @classmethod
@@ -867,19 +932,19 @@ notebook.add(frame2, text="Output")
 
 #Create Attribute UI
 attrObj = AttributeObject()
-attrUI = UI(attrObj,frame1)
+attrUI = UI(attrObj,frame1,frame2)
 
 #Create Hard Constraints UI
 hardCObj = HardConstraintObject()
-hardCUI = UI(hardCObj,frame1)
+hardCUI = UI(hardCObj,frame1,frame2)
 
 #Create Preferences UI
 prefObj = PreferencesObject()
-prefUI = UI(prefObj, frame1)
+prefUI = UI(prefObj, frame1,frame2)
 
 #create output page
-outputUI1 = UI(attrObj,frame2,'tab2')
-outputUI2 = UI(hardCObj,frame2,'tab2')
-outputUI3 = UI(prefObj,frame2,'tab2')
+# outputUI1 = UI(prefObj,frame2,'tab2')
+# outputUI2 = UI(hardCObj,frame2,'tab2')
+# outputUI3 = UI(prefObj,frame2,'tab2')
 
 root.mainloop()
