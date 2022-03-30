@@ -86,23 +86,23 @@ class DataObject:
         :q2 - row to compare against in qualitative matrix after being evaluated
         '''
         #check if q1 and q2 are comparable
-        q1IsGreater = False
-        q2IsGreater = False
+        q1IsOptimal = False
+        q2IsOptimal = False
         for i in range(0,len(q1)):
             if(q1[i] == 'inf' and q2[i] != 'inf'):
-                q2IsGreater = True
+                q2IsOptimal = True
             elif(q1[i] != 'inf' and q2[i] == 'inf'):
-                q1IsGreater = True
+                q1IsOptimal = True
             elif(q1[i] > q2[i]):
-                q1IsGreater = True
+                q2IsOptimal = True
             elif(q1[i] < q2[i]):
-                q2IsGreater = True
-        if(q1IsGreater and q2IsGreater):
+                q1IsOptimal = True
+        if(q1IsOptimal and q2IsOptimal):
             #incomparable rows
             return 0
-        elif(q2IsGreater):
+        elif(q2IsOptimal):
             return 0
-        elif(q1IsGreater):
+        elif(q1IsOptimal):
             return 1
         else:
             #q1 and q2 probably equivalent
@@ -115,7 +115,53 @@ class DataObject:
         '''
         objectsList = []
         objectsList = cls.getNObjectsFromClasp(0)
-        print('@optimize all objects',objectsList)
+        optimizeOutputStr = 'OPTIMIZATION\n\n'
+        modelList = cls.modelToString(objectsList)
+        optimizeOutputStr += 'All possible objects:\n'
+        for m in range(0,len(modelList)):
+            optimizeOutputStr += 'Object '+str(m+1) + '.' + modelList[m] +'\n'
+        optimizeOutputStr += '\n'
+
+        #optimize for Penalty logic
+        optimizeOutputStr += 'An Optimal Object for Penalty Logic -> '
+        objectPenalties = [0]*len(objectsList)
+        for i in range(0,len(objectsList)):
+            penaltyClauses = []
+            penaltyClauses.extend([o for o in objectsList[i].split() if o != '0'])
+            for value in cls.preferences.get('Penalty Logic'):
+                temp = penaltyClauses.copy()
+                temp.extend([v for v in value[0].split('&')])
+                models = cls.inputToClasp(temp,1)
+                if(models == None or models == []):
+                    objectPenalties[i] += value[1]
+
+        #get all indexes that have the minimum penalty(the most optimal object(s))
+        indexList = [index for index, value in enumerate(objectPenalties) if value == min(objectPenalties)]
+        preferredObjectNum = indexList.pop()
+        optimizeOutputStr += 'Object '+str((preferredObjectNum+1)) + ' is an optimal object.\n'
+
+        #optimize for Possibilistic Logic
+        possibilisticClauses = []
+        objectPref= [1,1]
+        optimizeOutputStr += 'An Optimal Object for Possibilistic Logic -> '
+        for i in range(0,len(objectsList)):
+            possibilisticClauses = []
+            possibilisticClauses.extend([o for o in objectsList[i].split() if o != '0'])
+            for value in cls.preferences.get('Possibilistic Logic'):
+                temp = possibilisticClauses.copy()
+                temp.extend([v for v in value[0].split('&')])
+                models = cls.inputToClasp(temp,1)
+                if(models == None or models == []):
+                    pref = 1 - value[1]
+                    if(objectPref[i]>pref):
+                        #the lowest preference wins out for each object
+                        objectPref[i] = pref
+
+        indexList = [index for index, value in enumerate(objectPenalties) if value == min(objectPenalties)]
+        preferredObjectNum = indexList.pop()
+        optimizeOutputStr += 'Object '+str((preferredObjectNum+1)) + ' is an optimal object.\n'
+
+        return optimizeOutputStr
 
     @classmethod
     def exemplify(cls):
