@@ -1,15 +1,11 @@
 Penalty Logic
-fish AND wine, 10
-wine OR cake, 6
-beer AND beer OR beef AND NOT soup, 7
+gun AND cake, 10
+gun AND cake AND car, 20
 
 Possibilistic Logic
-fish AND wine, 0.8
-wine OR cake, 0.5
-beer AND beer OR beef AND NOT soup, 0.6
+gun AND cake, 0.1
+gun AND cake AND car, 0.9
 
 Qualitative Choice Logic
-fish BT beef IF
-wine BT beer IF fish
-beef AND beer BT fish AND beer BT beef AND wine IF
-cake BT ice-cream IF soup
+gun AND cake BT car AND cake IF fork
+gun AND cake AND car BT spoon IF
