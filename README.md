@@ -9,17 +9,25 @@ Description:
 Knowledge-based intelligent system that collects user preferences as input and utilizes penalty, possibilistic, and qualititative choice logical reasoning to output feasible models, exemplification models, as well as optimized and omni-optimized models. The program utilizes a GUI designed with the Python Tkinter package that allows the user to input attributes, hard constraints, and preferences as individual plain text files, of which the contents can be viewed in the "Input" tab, and with results of reasoning tasks that can be viewed in the "Output" tab. Sympy package is used to convert the logical statements from user input into CNF form, which generates an "output.cnf" file in the /src folder. The output.cnf file is parsed by CLASP, a SAT solver that resolves CNF propositional formulas, returns feasible models, and determines whether models are unfeasible. These calculations are used to support user-selected reasoning function buttons on the UI, including:
 
 Check if Feasibile Objects - determine whether feasible models exist given hard constraints
+
 Exemplification - generates two possible models and detemines which is preferable
+
 Optimization - returns an optimal model
+
 Omni-optimization - returns all optimal models
 
 Programming Language: Python 3.9
 
 Packages/Plugins: 
+
 conda 4.9.2 - for package management
+
 tkinter - for GUI development
+
 sympy - for CNF conversions
+
 potassco clingo 5.5.1 - for CLASP integration
+
 
 Usage:
 Execute program from command line using "./python main.py"
