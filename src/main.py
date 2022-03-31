@@ -108,6 +108,127 @@ class DataObject:
         else:
             #q1 and q2 probably equivalent
             return 0
+    @classmethod
+    def omnioptimize(cls):
+        '''
+        find an optimal object w.r.t T.
+        '''
+        objectsList = []
+        objectsList = cls.getNObjectsFromClasp(0)
+        omnioptimizeOutputStr = 'OMNI-OPTIMIZATION\n\n'
+        modelList = cls.modelToString(objectsList)
+        omnioptimizeOutputStr += 'All possible objects:\n'
+        for m in range(0,len(modelList)):
+            omnioptimizeOutputStr += 'Object '+str(m+1) + '.' + modelList[m] +'\n'
+        omnioptimizeOutputStr += '\n'
+
+        #optimize for Penalty logic
+        omnioptimizeOutputStr += '\nPenalty Logic:\n'
+        objectPenalties = [0]*len(objectsList)
+        for i in range(0,len(objectsList)):
+            penaltyClauses = []
+            penaltyClauses.extend([o for o in objectsList[i].split() if o != '0'])
+            for value in cls.preferences.get('Penalty Logic'):
+                temp = penaltyClauses.copy()
+                temp.extend([v for v in value[0].split('&')])
+                models = cls.inputToClasp(temp,1)
+                if(models == None or models == []):
+                    objectPenalties[i] += value[1]
+
+        #get all indexes that have the minimum penalty(the most optimal object(s))
+        indexList = [index for index, value in enumerate(objectPenalties) if value == min(objectPenalties)]
+        for prefIndex in indexList:
+            omnioptimizeOutputStr += 'Object '+str((prefIndex+1)) + ' is an optimal object.\n'
+
+        print('Final Object Penalty List @OMNIoptimize',objectPenalties)
+
+        #optimize for Possibilistic Logic
+        possibilisticClauses = []
+        objectPref= [1]*len(objectsList)
+        omnioptimizeOutputStr += '\nPossibilistic Logic:\n'
+        for i in range(0,len(objectsList)):
+            possibilisticClauses = []
+            possibilisticClauses.extend([o for o in objectsList[i].split() if o != '0'])
+            for value in cls.preferences.get('Possibilistic Logic'):
+                temp = possibilisticClauses.copy()
+                temp.extend([v for v in value[0].split('&')])
+                models = cls.inputToClasp(temp,1)
+                if(models == None or models == []):
+                    pref = 1 - value[1]
+                    if(objectPref[i]>pref):
+                        #the lowest preference wins out for each object
+                        objectPref[i] = pref
+
+        indexList = [index for index, value in enumerate(objectPref) if value == max(objectPref)]
+        for prefIndex in indexList:
+            omnioptimizeOutputStr += 'Object '+str((prefIndex+1)) + ' is an optimal object.\n'
+
+        print('Final Object Pref List @OMNIoptimize',objectPref)
+
+        #optimize for Qualitative Choice Logic
+        qualitativeMatrix = [] #list of lists each list inside will be for a single object
+        for objectNum in range(0,len(objectsList)):
+            qualitativeMatrix.append(['inf']*len(cls.preferences.get('Qualitative Choice Logic')))
+
+        # print('Qualitative Matrix initialized',qualitativeMatrix)
+        qualRuleNum = 0 #which clause am I on?
+        omnioptimizeOutputStr += '\nQualitative Choice Logic:\n'
+        for i in range(0,len(objectsList)):
+            qualRuleNum = 0 #pretty much serves as the counter for the next for loop
+            for value in cls.preferences.get('Qualitative Choice Logic'):
+                qualClause = value[0] #dict
+                implies = value[1] #digitized value of implication attribute
+                # print('qualClause',qualClause)
+                if(implies != None):
+                    impliesRegex = str(implies)
+                    if(implies > 0):
+                        impliesRegex = '[^-]'+str(implies)
+                    # print('implies,objectsList[i]:' +str(implies) + ' ' +objectsList[i])
+                    # print('re.match(str(implies),objectsList[i]',re.search(str(impliesRegex),objectsList[i]))
+                    implicationPass = re.search(impliesRegex,objectsList[i])
+                    if(implicationPass == None):
+                        #implication does not pass -> GoTo next qualitative rule
+                        # print('Implies rule failed go to next rule',qualClause)
+                        qualRuleNum += 1
+                        continue
+                #populate qualitative matrix
+
+                for partOfClause,partOfClauseOrder in qualClause.items():
+                    # print('typeof partOfClauseOrder',type(partOfClauseOrder))
+                    # print('qualClause',qualClause)
+                    # print('objectsList[i]',objectsList[i])
+                    claspInput = []
+                    claspInput.extend([o for o in objectsList[i].split() if o != '0'])
+                    claspInput.extend([v for v in partOfClause.split('&')])
+                    models = cls.inputToClasp(claspInput,1)
+                    if(models == None or models == []):
+                        #clause not matched
+                        continue
+                    else:
+                        #clause matched
+                        if(qualitativeMatrix[i][qualRuleNum] == 'inf' or qualitativeMatrix[i][qualRuleNum] > partOfClauseOrder):
+                            #a greater priority partialClause has passed
+                            #ex: gun and car BT gun and cake. gun and car passed so update with 1 in this case
+
+                            # print('qualitativeMatrix[i]',qualitativeMatrix[i])
+                            qualitativeMatrix[i][qualRuleNum] = partOfClauseOrder
+                qualRuleNum += 1 #moving on to next clause
+
+        print('Qualitative Choice Logic matrix @OMNIoptimize',qualitativeMatrix)
+        print()
+        #figure out preference for qualitative logic
+        #after table is created
+        qOptimal = [0]*len(qualitativeMatrix) #this variable will contain how many times is qualitative matrix row at q(see below) greater than all of the other rows
+        for q in range(0,len(qualitativeMatrix)):
+            for qual in qualitativeMatrix:
+                qOptimal[q] += cls.checkIfQualitativeRowGreaterThan(qualitativeMatrix[q],qual)
+
+        # print('Qualitative Choice Logic matrix',qualitativeMatrix)
+        indexList = [index for index, value in enumerate(qOptimal) if value == max(qOptimal)]
+        for prefIndex in indexList:
+            omnioptimizeOutputStr += 'Object '+str((prefIndex+1)) + ' is an optimal object.\n'
+
+        return omnioptimizeOutputStr
 
     @classmethod
     def optimize(cls):
@@ -141,6 +262,8 @@ class DataObject:
         preferredObjectNum = indexList.pop()
         optimizeOutputStr += 'Object '+str((preferredObjectNum+1)) + ' is an optimal object.\n'
 
+        print('Final Object Penalty List @optimize',objectPenalties)
+
         #optimize for Possibilistic Logic
         possibilisticClauses = []
         objectPref= [1]*len(objectsList)
@@ -162,16 +285,18 @@ class DataObject:
         preferredObjectNum = indexList.pop()
         optimizeOutputStr += 'Object '+str((preferredObjectNum+1)) + ' is an optimal object.\n'
 
+        print('Final Object Pref List @optimize',objectPref)
+
         #optimize for Qualitative Choice Logic
         qualitativeMatrix = [] #list of lists each list inside will be for a single object
         for objectNum in range(0,len(objectsList)):
-            qualitativeMatrix.append(['inf','inf'])
+            qualitativeMatrix.append(['inf']*len(cls.preferences.get('Qualitative Choice Logic')))
 
         # print('Qualitative Matrix initialized',qualitativeMatrix)
         qualRuleNum = 0 #which clause am I on?
         optimizeOutputStr += 'Qualitative Choice Logic -> '
         for i in range(0,len(objectsList)):
-            qualRuleNum = 0
+            qualRuleNum = 0 #pretty much serves as the counter for the next for loop
             for value in cls.preferences.get('Qualitative Choice Logic'):
                 qualClause = value[0] #dict
                 implies = value[1] #digitized value of implication attribute
@@ -189,12 +314,13 @@ class DataObject:
                         qualRuleNum += 1
                         continue
                 #populate qualitative matrix
-                claspInput = []
-                claspInput.extend([o for o in objectsList[i].split() if o != '0'])
+
                 for partOfClause,partOfClauseOrder in qualClause.items():
                     # print('typeof partOfClauseOrder',type(partOfClauseOrder))
                     # print('qualClause',qualClause)
                     # print('objectsList[i]',objectsList[i])
+                    claspInput = []
+                    claspInput.extend([o for o in objectsList[i].split() if o != '0'])
                     claspInput.extend([v for v in partOfClause.split('&')])
                     models = cls.inputToClasp(claspInput,1)
                     if(models == None or models == []):
@@ -210,7 +336,8 @@ class DataObject:
                             qualitativeMatrix[i][qualRuleNum] = partOfClauseOrder
                 qualRuleNum += 1 #moving on to next clause
 
-        print('Qualitative Choice Logic matrix',qualitativeMatrix)
+        print('Qualitative Choice Logic matrix @Optimize',qualitativeMatrix)
+        print()
         #figure out preference for qualitative logic
         #after table is created
         qOptimal = [0]*len(qualitativeMatrix) #this variable will contain how many times is qualitative matrix row at q(see below) greater than all of the other rows
@@ -242,8 +369,8 @@ class DataObject:
             exemplifyOutputStr += 'Object '+str(m+1) + '.' + modelList[m] +'\n'
         exemplifyOutputStr += '\n'
 
-        print('Emplify random objects',objectsList)
-        print('Preferences dict',cls.preferences)
+        # print('Emplify random objects',objectsList)
+        # print('Preferences dict',cls.preferences)
 
         # exemplify for Penalty logic
         exemplifyOutputStr += 'Penalty Logic Preference -> '
@@ -255,7 +382,7 @@ class DataObject:
             penaltyClauses = []
             penaltyClauses.extend([o for o in objectsList[i].split() if o != '0'])
             for value in cls.preferences.get('Penalty Logic'):
-                print('value[0]',value[0])
+                # print('value[0]',value[0])
                 temp = penaltyClauses.copy()
                 temp.extend([v for v in value[0].split('&')])
                 models = cls.inputToClasp(temp,1)
@@ -266,6 +393,9 @@ class DataObject:
                     objectPenalties[i] += value[1]
                 # print('objectDict',objectPenalties)
                 # print('models',models)
+
+        print('Final Object Penalty List @exemplify',objectPenalties)
+
         if(objectPenalties[0] == objectPenalties[1]):
             print('Objects are equivalent')
             exemplifyOutputStr += 'Objects are equivalent.\n'
@@ -332,8 +462,8 @@ class DataObject:
         else:
             preferredObjectNum = objectPref.index(max(objectPref))
             modelList = cls.modelToString(objectsList)
-            print('modelList',modelList)
-            print('possibilistic preference',(preferredObjectNum+1))
+            # print('modelList',modelList)
+            # print('possibilistic preference',(preferredObjectNum+1))
             exemplifyOutputStr += 'Object ' + str((preferredObjectNum+1)) + ' is preferred.\n'
             # top1 = Toplevel()
             # top1.geometry("750x250")
@@ -344,8 +474,10 @@ class DataObject:
             #     popupText += '\n' + str(m+1) + '.' + modelList[m]
             # Label(top1, text=(popupText), font=('12')).place(x=150,y=80)
 
+        print('Final Object Pref List @exemplify',objectPref)
+
         #exemplify for Qualitative
-        qualitativeMatrix = [['inf','inf'],['inf','inf']] #list of lists each list inside will be for a single object
+        qualitativeMatrix = [['inf']*len(cls.preferences.get('Qualitative Choice Logic')),['inf']*len(cls.preferences.get('Qualitative Choice Logic'))]
         clauseNum = 0 #which clause am I on?
         exemplifyOutputStr += 'Qualitative Choice Logic -> '
         for i in range(0,len(objectsList)):
@@ -358,15 +490,16 @@ class DataObject:
                     if(implies > 0):
                         impliesRegex = '[^-]'+str(implies)
                     implicationPass = re.search(impliesRegex,objectsList[i])
-                    print('implies,objectsList[i]:' +str(implies) + ' ' +objectsList[i])
-                    print('re.match(str(implies),objectsList[i]',re.search(str(impliesRegex),objectsList[i]))
+                    # print('implies,objectsList[i]:' +str(implies) + ' ' +objectsList[i])
+                    # print('re.match(str(implies),objectsList[i]',re.search(str(impliesRegex),objectsList[i]))
                     if(implicationPass == None):
                         clauseNum += 1
                         continue
-                claspInput = []
-                claspInput.extend([o for o in objectsList[i].split() if o != '0'])
+
                 for partOfClause,partOfClauseOrder in qualClause.items():
-                    print('typeof partOfClauseOrder',type(partOfClauseOrder))
+                    # print('typeof partOfClauseOrder',type(partOfClauseOrder))
+                    claspInput = []
+                    claspInput.extend([o for o in objectsList[i].split() if o != '0'])
                     claspInput.extend([v for v in partOfClause.split('&')])
                     models = cls.inputToClasp(claspInput,1)
                     if(models == None or models == []):
@@ -386,14 +519,15 @@ class DataObject:
             for qual in qualitativeMatrix:
                 qGreaterThan[q] += cls.checkIfQualitativeRowGreaterThan(qualitativeMatrix[q],qual)
 
-        print('qualitative matrix after',qualitativeMatrix)
-        print('QualClauses',cls.preferences.get('Qualitative Choice Logic'))
+        print('qualitative matrix final @exemplify',qualitativeMatrix)
+        print()
         print('Generated objects',objectsList)
+
         if(qGreaterThan[0] == qGreaterThan[1]):
-            print('Objects are equivalent according QCL')
+            # print('Objects are equivalent according to QCL')
             exemplifyOutputStr += 'Objects are equivalent.\n'
         else:
-            print('Preference is for object:',(qGreaterThan.index(max(qGreaterThan))+1))
+            # print('Preference is for object:',(qGreaterThan.index(max(qGreaterThan))+1))
             exemplifyOutputStr += 'Object ' + str((qGreaterThan.index(max(qGreaterThan))+1)) + ' is preferred.\n'
         return exemplifyOutputStr
 
@@ -482,7 +616,7 @@ class DataObject:
         '''
         clear everything used in reading in Preferences file
         '''
-        cls.preferences = dict()
+        cls.preferences = dict({'Penalty Logic':[],'Possibilistic Logic':[],'Qualitative Choice Logic':[]})
         print("CLEARED PREFERENCES DATA")
 
     @classmethod
@@ -612,7 +746,7 @@ class DataObject:
         p = Popen(["clasp","./output.cnf"],stdout=PIPE,stderr=PIPE)
         stdout,stderr = p.communicate()
         # print('stdout\n',stdout)
-        print('UNSATISFIABLE:\t','UNSATISFIABLE' in str(stdout))
+        # print('UNSATISFIABLE:\t','UNSATISFIABLE' in str(stdout))
         satisfy = not 'UNSATISFIABLE' in str(stdout)
         # top= Toplevel()
         # top.geometry("750x250")
@@ -651,6 +785,7 @@ class AttributeObject(DataObject):
         '''
         #self.clearAttributes()
         #print('Inside attribute class\n',fileData)
+        # self.clearAttributes()#clear buffers for attributes
         lines = fileData.split('\n')#get each line
         parsedAttributeIndex = 1 #will contribute to creating integer version of attributes
         for line in lines:
@@ -677,6 +812,7 @@ class HardConstraintObject(DataObject):
         Parse file data for Constraint file and save it to array of strings
         '''
         #self.clearHardConstraints()
+        # self.clearHardConstraints()#clear buffers for hard constraints
         lines = fileData.split('\n')#get each line
         for line in lines:
             terms = line.split(' ')
@@ -750,6 +886,7 @@ class PreferencesObject(DataObject):
         '''
         Parse Preferences file
         '''
+        # self.clearPreferences()#clear buffers for preferences
         lines = fileData.split('\n')
         #print(lines)
         penalty = False
@@ -785,7 +922,7 @@ class PreferencesObject(DataObject):
                 transformedQualitativeData = self.transformQualitativeChoiceData(line)
                 # print('@ parseFileData() transformedQualitativeData',transformedQualitativeData)
                 self.addToPreferences('Qualitative Choice Logic',transformedQualitativeData)
-        print('after adding to Preferences datastructure',self.preferences)
+        print('Final Preferences datastructure',self.preferences)
 
 class UI:
     '''
@@ -798,7 +935,7 @@ class UI:
     columnNum2 = 0 #for tab2
     buttonText = {'attr':"Attributes", 'hardc':"Hard Constraints", 'pref':"Preferences"}
     buttonsToDisable = [] #list of buttons to disable and enable
-    def __init__(self,dataObject,frame,frame2,tab='tab1'):
+    def __init__(self,dataObject,frame,frame2):
         '''
         Initialize UI object. Window has already been initialized. Canvas becomes a instance of every UI object
         '''
@@ -885,6 +1022,28 @@ class UI:
         output = self.dataObject.optimize()
         self.canvas2.create_text(10, 10, text=output, anchor='nw', tag=self.uniqueTag)
 
+    def omnioptimize(self):
+        '''
+        Call DataObject.optimize()
+        '''
+        self.canvas2.delete(self.uniqueTag)
+        output = self.dataObject.omnioptimize()
+        self.canvas2.create_text(10, 10, text=output, anchor='nw', tag=self.uniqueTag)
+
+    # def clearCanvas(self,canvasNum,uniqueTags=[]):
+    #     '''
+    #     :canvasNum = 1 is input tab canvases, 2 is output tab canvas
+    #     :uniqueTag = [] of uniqueTags(str) of canvases for :canvasNum = 2 its automatically all three uniqueTags:'attr','hardc','pref'
+    #     '''
+    #     if(canvasNum==1):
+    #         print('CLEARING CANVAS1 for tags:',uniqueTags)
+    #         for tag in uniqueTags:
+    #             self.canvas.delete(tag)
+    #     elif(canvasNum==2):
+    #         print('CLEARING CANVAS2')
+    #         for tag in ['attr','hardc','pref']:
+    #             self.canvas2.delete(tag)
+
     def createCanvasForInputTab(self):
         '''
         Create Canvas to insert text
@@ -917,7 +1076,7 @@ class UI:
             b3.grid(column=8, row=2, pady=5)
             b4=ttk.Button(self.frame, text="Optimization", command=self.optimize)
             b4.grid(column=8, row=3, pady=5)
-            b5=ttk.Button(self.frame, text="Omni-Optimization", command=self.checkSatisfy)
+            b5=ttk.Button(self.frame, text="Omni-Optimization", command=self.omnioptimize)
             b5.grid(column=8, row=4, pady=5)
             self.buttonsToDisable.append(b2)
             self.buttonsToDisable.append(b3)
@@ -998,6 +1157,26 @@ class UI:
         '''
         Open a file and read data from it
         '''
+        if(self.getType()=='attr'):
+                 self.enableButtons()
+        # #clear buffers and UI
+        # if(self.getType()=='attr'):
+        #     # enable buttons and clear all preference buffers
+        #     # self.dataObject.clearAttributes()
+        #     # self.dataObject.clearHardConstraints()
+        #     # self.dataObject.clearPreferences()
+        #     self.clearCanvas(1,['attr','hardc','pref'])
+        #     self.clearCanvas(2)
+        #     self.enableButtons()
+        # elif(self.getType()=='hardc'):
+        #     # self.dataObject.clearHardConstraints()
+        #     self.clearCanvas(1,['hardc'])
+        #     self.clearCanvas(2)
+        # elif(self.getType()=='pref'):
+        #     # self.dataObject.clearPreferences()
+        #     self.clearCanvas(1,['pref'])
+        #     self.clearCanvas(2)
+
         file = filedialog.askopenfilename(initialdir = "../assets", title=("Select a file"), filetypes=(("Text file", "*.txt*"),("Any File", "*.*")))
         self.setFileName(file)
 
@@ -1006,9 +1185,6 @@ class UI:
 
         #read from file and set file data
         if(file):
-            if(self.getType()=='attr'):
-                # print('it hits here')
-                self.enableButtons()
             fileObj = open(file)
             fileData = fileObj.read()
             self.canvas.create_text(10, 10, text=fileData, anchor='nw', tag=self.uniqueTag)
