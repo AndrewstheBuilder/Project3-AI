@@ -1,11 +1,14 @@
 Penalty Logic
 gun AND cake, 10
 gun AND cake AND car, 20
+gun OR ice-cream IF car, 5
 
 Possibilistic Logic
 gun AND cake, 0.1
 gun AND cake AND car, 0.9
+beef AND wine IF car, 0.8
 
 Qualitative Choice Logic
 gun AND cake BT car AND cake IF fork
 gun AND cake AND car BT spoon IF
+beef AND wine BT shirt IF car
