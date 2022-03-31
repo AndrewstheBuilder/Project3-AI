@@ -43,16 +43,25 @@ class DataObject:
     @classmethod
     def inputToClasp(cls,clauses,n):
         '''
-        :clauses - cnf form
+        :clauses - list of digitized strings in cnf form. CNF forms have been split by AND before being passed into clauses. No ANDs allowed in clauses
         :n - input n = 0 to get all models from clasp
         Run clasp with clauses
         :return models from clasp output
         '''
+        print('@inputToClasp() clauses',clauses)
         claspInput = 'p cnf '+str(int(len(cls.symbolsList)/2)) + ' ' + str(len(clauses))
         for c in clauses:
             claspInput += '\n'
-            claspInput += ' '.join(c.split('|')) + ' 0' #split on ors and add spaces in between
-        # print('clasp input\n',claspName)
+
+            #handle ~(NOT) conversions. Convert ~ to -1* because that is what not is.
+            #~-1 = 1, ~1 = -1
+            for individualVariable in  c.split('|'):
+                #split on ors and add spaces in between the individualVariable inputs
+                cReplacedNot = individualVariable.replace('~','-1*')#if individualVariable contains a NOT it will be evaluated
+                evalulatedStr = str(eval(cReplacedNot))
+                claspInput += evalulatedStr + ' '
+            claspInput += ' 0'
+        print('@inputToClasp() clasp input\n',claspInput)
         claspFile = './output.cnf'
         with open(claspFile,'w') as o:
             o.write(claspInput)
@@ -127,10 +136,10 @@ class DataObject:
         objectPenalties = [0]*len(objectsList)
         for i in range(0,len(objectsList)):
             penaltyClauses = []
-            penaltyClauses.extend([o for o in objectsList[i].split() if o != '0'])
+            penaltyClauses.extend([o.strip() for o in objectsList[i].split() if o != '0'])
             for value in cls.preferences.get('Penalty Logic'):
                 temp = penaltyClauses.copy()
-                temp.extend([v for v in value[0].split('&')])
+                temp.extend([v.strip() for v in value[0].split('&')])
                 models = cls.inputToClasp(temp,1)
                 if(models == None or models == []):
                     objectPenalties[i] += value[1]
@@ -249,10 +258,10 @@ class DataObject:
         objectPenalties = [0]*len(objectsList)
         for i in range(0,len(objectsList)):
             penaltyClauses = []
-            penaltyClauses.extend([o for o in objectsList[i].split() if o != '0'])
+            penaltyClauses.extend([o.strip() for o in objectsList[i].split() if o != '0'])
             for value in cls.preferences.get('Penalty Logic'):
                 temp = penaltyClauses.copy()
-                temp.extend([v for v in value[0].split('&')])
+                temp.extend([v.strip() for v in value[0].split('&')])
                 models = cls.inputToClasp(temp,1)
                 if(models == None or models == []):
                     objectPenalties[i] += value[1]
@@ -380,11 +389,11 @@ class DataObject:
             # print('object in ObjectList',object.split())
             # objectDict[object] = 0#initally 0 penalty
             penaltyClauses = []
-            penaltyClauses.extend([o for o in objectsList[i].split() if o != '0'])
+            penaltyClauses.extend([o.strip() for o in objectsList[i].split() if o != '0'])
             for value in cls.preferences.get('Penalty Logic'):
                 # print('value[0]',value[0])
                 temp = penaltyClauses.copy()
-                temp.extend([v for v in value[0].split('&')])
+                temp.extend([v.strip() for v in value[0].split('&')])
                 models = cls.inputToClasp(temp,1)
                 if(models == None or models == []):
                     #apply penalty value[1]
@@ -590,7 +599,7 @@ class DataObject:
             cls.symbolsList.append(str(index))
         cls.parsedAttributes[attribute] = index
         cls.parsedAttributesReversed[index] = attribute
-        # print('@ add method',cls.parsedAttributes)
+        # print('@ add method parsedAttributesReveresed',cls.parsedAttributesReversed)
 
     @classmethod
     def clearAttributes(cls):
@@ -631,7 +640,7 @@ class DataObject:
         print('symbols',cls.symbolsList)
 
     @classmethod
-    def getAttribute(cls,key):
+    def getAttributeIndex(cls,key):
         '''
         :returns parsedAttributes[key] -> int (value)
         '''
@@ -677,25 +686,34 @@ class DataObject:
     def convertToCNF(cls,clause):
         '''
         Convert data to CNF
-        :clause - singular clause with ANDs and ORs no extra info
+        :clause - singular clause that may contain boolean statements with ANDs and ORs and IF
         :return CNF converted string
         '''
         symbolRep = symbols(" ,".join(cls.symbolsList))
-        dataArr = clause.split() #split by spaces
         evalStr = ''
+        implicationArr = [val.strip() for val in clause.split('IF')]
+        if(len(implicationArr) == 2):
+            #implication exists
+            ifCondition = implicationArr[1] #if p then q
+            print('ifClause',ifCondition)
+            ifClauseNum = str(cls.getAttributeIndex(ifCondition))
+            index = cls.symbolsList.index(ifClauseNum)
+            evalStr += 'symbolRep['+str(index)+']' + ' >> '
+        thenCondition = implicationArr[0]
+        dataArr = thenCondition.split() #split by spaces
         for d in dataArr:
             # print('d in dataARR',d)
             # print('getAttr',cls.getAttribute(d))
             # print('(cls.getAttribute(d)) in cls.symbolsList',(cls.getAttribute(d)) in cls.symbolsList)
             # print('symbolsList',cls.symbolsList)
-            dNum = str(cls.getAttribute(d))
+            dNum = str(cls.getAttributeIndex(d))
             if(dNum in cls.symbolsList):
                 index = cls.symbolsList.index(dNum)
                 evalStr += 'symbolRep['+str(index)+']'
             else:
                 evalStr += ' ' +cls.binaryOperators.get(d)+' '
-        # print('@ convertToCNF evalStr',evalStr)
-        # print('@ convertToCNF to_cnf(evalStr):\t',to_cnf((eval(evalStr))))
+        print('@ convertToCNF evalStr',evalStr)
+        print('@ convertToCNF return to_cnf(evalStr):\t',str(to_cnf((eval(evalStr)))))
         return str(to_cnf((eval(evalStr))))
 
     # @classmethod
@@ -833,7 +851,7 @@ class HardConstraintObject(DataObject):
                     constraintList.append(term)
                 else:
                     #has to be a binary attribute
-                    constraintList.append(str(negate * self.getAttribute(term)))
+                    constraintList.append(str(negate * self.getAttributeIndex(term)))
                     negate = 1 #reset negate variable to 1 after use
             self.addToHardConstraints(constraintList)
         self.printHardConstraints()
@@ -883,7 +901,7 @@ class PreferencesObject(DataObject):
             qualCNFStr = self.convertToCNF(qualClauses[j])
             # print('qualCNFstr',qualCNFStr)
             tempDict[qualCNFStr] = (j+1) #order of clause is (j+1)
-        return [tempDict,self.getAttribute(qualImplies)]
+        return [tempDict,self.getAttributeIndex(qualImplies)]
 
     def parseFileData(self,fileData):
         '''
@@ -1189,7 +1207,9 @@ class UI:
         #read from file and set file data
         if(file):
             fileObj = open(file)
-            fileData = fileObj.read()
+            fileData = fileObj.read().strip()
+            # print('fileData',fileData)
+            # print('fileData.strip()',fileData.strip())
             self.canvas.create_text(10, 10, text=fileData, anchor='nw', tag=self.uniqueTag)
             self.setFileData(fileData)
             self.parseFileData(fileData)
