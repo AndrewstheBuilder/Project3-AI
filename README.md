@@ -38,7 +38,7 @@ User clicks "Insert a File" under the "Hard Constraints" section to open a file 
 Select "Hard Constraints.txt" and click "Open" to upload file containing 6 constraints for the first test case. 
 This action unlocks the next "Insert a File" button for the "Preferences" section.
 User clicks "Insert a File" under the "Preferences" section to open a file explorer window to select a file to upload.
-Select "Hard Constraints.txt" and click "Open" to upload file containing 6 preferences for the first test case.
+Select "Preferences.txt" and click "Open" to upload file containing 6 preferences for the first test case.
 User may select "Check if Feasibile Objects", "Exemplification", "Optimzation", or "Omni-optimzation" to perform reasoning tasks.
 Outcomes from reasoning tasks can be viewed in the "Output" tab in the main window.
 Reasoning tasks may be run repeatedly until program is terminated.
