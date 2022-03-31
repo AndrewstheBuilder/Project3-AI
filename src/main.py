@@ -48,7 +48,7 @@ class DataObject:
         Run clasp with clauses
         :return models from clasp output
         '''
-        print('@inputToClasp() clauses',clauses)
+        # print('@inputToClasp() clauses',clauses)
         claspInput = 'p cnf '+str(int(len(cls.symbolsList)/2)) + ' ' + str(len(clauses))
         for c in clauses:
             claspInput += '\n'
@@ -61,7 +61,7 @@ class DataObject:
                 evalulatedStr = str(eval(cReplacedNot))
                 claspInput += evalulatedStr + ' '
             claspInput += ' 0'
-        print('@inputToClasp() clasp input\n',claspInput)
+        # print('@inputToClasp() clasp input\n',claspInput)
         claspFile = './output.cnf'
         with open(claspFile,'w') as o:
             o.write(claspInput)
@@ -139,7 +139,7 @@ class DataObject:
             penaltyClauses.extend([o.strip() for o in objectsList[i].split() if o != '0'])
             for value in cls.preferences.get('Penalty Logic'):
                 temp = penaltyClauses.copy()
-                temp.extend([v.strip() for v in value[0].split('&')])
+                temp.extend([re.sub(r"\(|\)","",v).strip() for v in value[0].split('&')])
                 models = cls.inputToClasp(temp,1)
                 if(models == None or models == []):
                     objectPenalties[i] += value[1]
@@ -160,7 +160,7 @@ class DataObject:
             possibilisticClauses.extend([o for o in objectsList[i].split() if o != '0'])
             for value in cls.preferences.get('Possibilistic Logic'):
                 temp = possibilisticClauses.copy()
-                temp.extend([v for v in value[0].split('&')])
+                temp.extend([re.sub(r"\(|\)","",v).strip() for v in value[0].split('&')])
                 models = cls.inputToClasp(temp,1)
                 if(models == None or models == []):
                     pref = 1 - value[1]
@@ -208,7 +208,7 @@ class DataObject:
                     # print('objectsList[i]',objectsList[i])
                     claspInput = []
                     claspInput.extend([o for o in objectsList[i].split() if o != '0'])
-                    claspInput.extend([v for v in partOfClause.split('&')])
+                    claspInput.extend([re.sub(r"\(|\)","",v).strip() for v in partOfClause.split('&')])
                     models = cls.inputToClasp(claspInput,1)
                     if(models == None or models == []):
                         #clause not matched
@@ -261,7 +261,7 @@ class DataObject:
             penaltyClauses.extend([o.strip() for o in objectsList[i].split() if o != '0'])
             for value in cls.preferences.get('Penalty Logic'):
                 temp = penaltyClauses.copy()
-                temp.extend([v.strip() for v in value[0].split('&')])
+                temp.extend([re.sub(r"\(|\)","",v).strip() for v in value[0].split('&')])
                 models = cls.inputToClasp(temp,1)
                 if(models == None or models == []):
                     objectPenalties[i] += value[1]
@@ -282,7 +282,7 @@ class DataObject:
             possibilisticClauses.extend([o for o in objectsList[i].split() if o != '0'])
             for value in cls.preferences.get('Possibilistic Logic'):
                 temp = possibilisticClauses.copy()
-                temp.extend([v for v in value[0].split('&')])
+                temp.extend([re.sub(r"\(|\)","",v).strip() for v in value[0].split('&')])
                 models = cls.inputToClasp(temp,1)
                 if(models == None or models == []):
                     pref = 1 - value[1]
@@ -330,7 +330,7 @@ class DataObject:
                     # print('objectsList[i]',objectsList[i])
                     claspInput = []
                     claspInput.extend([o for o in objectsList[i].split() if o != '0'])
-                    claspInput.extend([v for v in partOfClause.split('&')])
+                    claspInput.extend([re.sub(r"\(|\)","",v).strip() for v in partOfClause.split('&')])
                     models = cls.inputToClasp(claspInput,1)
                     if(models == None or models == []):
                         #clause not matched
@@ -393,7 +393,7 @@ class DataObject:
             for value in cls.preferences.get('Penalty Logic'):
                 # print('value[0]',value[0])
                 temp = penaltyClauses.copy()
-                temp.extend([v.strip() for v in value[0].split('&')])
+                temp.extend([re.sub(r"\(|\)","",v).strip() for v in value[0].split('&')])
                 models = cls.inputToClasp(temp,1)
                 if(models == None or models == []):
                     #apply penalty value[1]
@@ -444,7 +444,7 @@ class DataObject:
             for value in cls.preferences.get('Possibilistic Logic'):
                 # print('value[0]',value[0])
                 temp = possibilisticClauses.copy()
-                temp.extend([v for v in value[0].split('&')])
+                temp.extend([re.sub(r"\(|\)","",v).strip() for v in value[0].split('&')])
                 models = cls.inputToClasp(temp,1)
                 if(models == None or models == []):
                     #Do 1 - possibilistic value
@@ -509,7 +509,7 @@ class DataObject:
                     # print('typeof partOfClauseOrder',type(partOfClauseOrder))
                     claspInput = []
                     claspInput.extend([o for o in objectsList[i].split() if o != '0'])
-                    claspInput.extend([v for v in partOfClause.split('&')])
+                    claspInput.extend([re.sub(r"\(|\)","",v).strip() for v in partOfClause.split('&')])
                     models = cls.inputToClasp(claspInput,1)
                     if(models == None or models == []):
                         #clause not matched
@@ -609,7 +609,7 @@ class DataObject:
         cls.symbolsList.clear()
         cls.parsedAttributes.clear()
         cls.parsedAttributesReversed.clear()
-        print("CLEARED ATTRIBUTES DATA")
+        # print("CLEARED ATTRIBUTES DATA")
 
     @classmethod
     def clearHardConstraints(cls):
@@ -618,7 +618,7 @@ class DataObject:
         '''
         cls.hardConstraints.clear()
         cls.hardConstraintsCNF.clear()
-        print("CLEARED HARD CONSTRAINTS DATA")
+        # print("CLEARED HARD CONSTRAINTS DATA")
 
     @classmethod
     def clearPreferences(cls):
@@ -629,7 +629,7 @@ class DataObject:
             # print(key)
             #cls.preferences = dict({'Penalty Logic':[],'Possibilistic Logic':[],'Qualitative Choice Logic':[]})
             cls.preferences[key].clear()
-        print("CLEARED PREFERENCES DATA")
+        # print("CLEARED PREFERENCES DATA")
 
     @classmethod
     def printParsedAttributes(cls):
@@ -695,7 +695,7 @@ class DataObject:
         if(len(implicationArr) == 2):
             #implication exists
             ifCondition = implicationArr[1] #if p then q
-            print('ifClause',ifCondition)
+            # print('ifClause',ifCondition)
             ifClauseNum = str(cls.getAttributeIndex(ifCondition))
             index = cls.symbolsList.index(ifClauseNum)
             evalStr += 'symbolRep['+str(index)+']' + ' >> '
@@ -712,8 +712,8 @@ class DataObject:
                 evalStr += 'symbolRep['+str(index)+']'
             else:
                 evalStr += ' ' +cls.binaryOperators.get(d)+' '
-        print('@ convertToCNF evalStr',evalStr)
-        print('@ convertToCNF return to_cnf(evalStr):\t',str(to_cnf((eval(evalStr)))))
+        # print('@ convertToCNF evalStr',evalStr)
+        # print('@ convertToCNF return to_cnf(evalStr):\t',str(to_cnf((eval(evalStr)))))
         return str(to_cnf((eval(evalStr))))
 
     # @classmethod
