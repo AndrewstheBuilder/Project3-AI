@@ -1,6 +1,8 @@
-NOT soup OR NOT ice-cream
-NOT beef OR salad
-cake OR soup
-car OR knife
-gun OR spoon
-cake OR spoon
+salad
+beef
+beer OR wine
+cake OR wine
+fork OR spoon
+shirt
+knife OR gun
+car OR beer
