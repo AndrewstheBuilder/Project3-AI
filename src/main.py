@@ -597,9 +597,9 @@ class DataObject:
         '''
         clear everything that is used in reading in attributes file
         '''
-        cls.symbolsList = []
-        cls.parsedAttributes = dict()
-        cls.parsedAttributesReversed = dict()
+        cls.symbolsList.clear()
+        cls.parsedAttributes.clear()
+        cls.parsedAttributesReversed.clear()
         print("CLEARED ATTRIBUTES DATA")
 
     @classmethod
@@ -607,8 +607,8 @@ class DataObject:
         '''
         clear everything used in reading in hard constraints file
         '''
-        cls.hardConstraints = []
-        cls.hardConstraintsCNF = []
+        cls.hardConstraints.clear()
+        cls.hardConstraintsCNF.clear()
         print("CLEARED HARD CONSTRAINTS DATA")
 
     @classmethod
@@ -616,7 +616,10 @@ class DataObject:
         '''
         clear everything used in reading in Preferences file
         '''
-        cls.preferences = dict({'Penalty Logic':[],'Possibilistic Logic':[],'Qualitative Choice Logic':[]})
+        for key,value in cls.preferences.items():
+            # print(key)
+            #cls.preferences = dict({'Penalty Logic':[],'Possibilistic Logic':[],'Qualitative Choice Logic':[]})
+            cls.preferences[key].clear()
         print("CLEARED PREFERENCES DATA")
 
     @classmethod
@@ -783,7 +786,7 @@ class AttributeObject(DataObject):
         '''
         Parse file data for Attribute File and save it to a data structure
         '''
-        #self.clearAttributes()
+        self.clearAttributes()
         #print('Inside attribute class\n',fileData)
         # self.clearAttributes()#clear buffers for attributes
         lines = fileData.split('\n')#get each line
@@ -811,7 +814,7 @@ class HardConstraintObject(DataObject):
         '''
         Parse file data for Constraint file and save it to array of strings
         '''
-        #self.clearHardConstraints()
+        self.clearHardConstraints()
         # self.clearHardConstraints()#clear buffers for hard constraints
         lines = fileData.split('\n')#get each line
         for line in lines:
@@ -886,7 +889,7 @@ class PreferencesObject(DataObject):
         '''
         Parse Preferences file
         '''
-        # self.clearPreferences()#clear buffers for preferences
+        self.clearPreferences()#clear buffers for preferences
         lines = fileData.split('\n')
         #print(lines)
         penalty = False
